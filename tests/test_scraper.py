@@ -15,6 +15,7 @@ from scraper import (
     CITY_ID_KYIV,
     KYIV_DISTRICTS,
     MAX_OFFSET_LIMIT,
+    PAGE_LIMIT,
     RESIDENTIAL_CATEGORY_ID,
     OLXHttpClient,
     OLXScraper,
@@ -114,6 +115,17 @@ class TestOfferFiltering(unittest.TestCase):
             ],
         }
         self.assertFalse(is_valid_rental_offer(offer, "commercial"))
+
+        # Point 11: Even if total_area is present, range in title marks it as multilot
+        offer_with_area = {
+            "offer_type": "offer",
+            "title": "Оренда офісів від 30 до 250 м² в сучасному БЦ",
+            "params": [
+                {"key": "price", "value": {"value": 450, "currency": "UAH"}},
+                {"key": "total_area", "value": "50"},
+            ],
+        }
+        self.assertFalse(is_valid_rental_offer(offer_with_area, "commercial"))
 
 
 class TestSliceDataclass(unittest.TestCase):
@@ -294,6 +306,49 @@ class TestOLXScraperLifecycle(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIn(status["status"], ("stopped", "completed"))
+
+    async def test_audit_fixes_points_9_and_10(self):
+        mock_client = AsyncMock(spec=OLXHttpClient)
+
+        # Point 9: Verify rightmost branch has price_to=None
+        async def mock_req(url=None, params=None, stop_event=None):
+            p_from = params.get("filter_float_price:from") if params else None
+            p_to = params.get("filter_float_price:to") if params else None
+            if p_to == 150000:
+                return {"metadata": {"visible_total_count": 800}}
+            if p_from == 150001:
+                self.assertIsNone(p_to, "Rightmost branch of bisection must not cap price_to")
+                return {"metadata": {"visible_total_count": 900}}
+            return {"metadata": {"visible_total_count": 0}}
+
+        mock_client.request_json.side_effect = mock_req
+        gen = SliceGenerator(mock_client)
+        slices = []
+        async for s in gen._bisect_price(
+            category_type="residential",
+            category_id=RESIDENTIAL_CATEGORY_ID,
+            district_id=11,
+            district_name="Печерський",
+            room_enum="dvuhkomnatnye",
+            p_min=0,
+            p_max=300000,
+            depth=1,
+        ):
+            slices.append(s)
+
+        self.assertEqual(len(slices), 2)
+        self.assertIsNone(slices[1].price_to)
+        self.assertIn("ціна від 150001", slices[1].label)
+
+        # Point 10: Pagination ranges
+        # visible_total_count = 40 should only query offset 0 (1 page)
+        offsets_40 = list(range(0, min(40, MAX_OFFSET_LIMIT), PAGE_LIMIT))
+        self.assertEqual(offsets_40, [0])
+
+        # visible_total_count = 1000 should stop at 960 and not query 1000
+        offsets_1000 = list(range(0, min(1000, MAX_OFFSET_LIMIT), PAGE_LIMIT))
+        self.assertEqual(offsets_1000[-1], 960)
+        self.assertNotIn(1000, offsets_1000)
 
 
 if __name__ == "__main__":

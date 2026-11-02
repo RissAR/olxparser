@@ -195,10 +195,9 @@ def is_valid_rental_offer(offer: Dict[str, Any], category_type: str = "residenti
     if area is None or area <= 0:
         return False
 
-    # Check multilot without concrete singular area in commercial
-    if category_type == "commercial":
-        if RE_MULTILOT_RANGE.search(title) and not area:
-            return False
+    # Check multilot range in title for commercial offers
+    if category_type == "commercial" and RE_MULTILOT_RANGE.search(title):
+        return False
 
     return True
 
@@ -397,6 +396,7 @@ class SliceGenerator:
         p_max: int,
         depth: int,
         stop_event: Optional[asyncio.Event] = None,
+        is_top_range: bool = True,
     ) -> AsyncGenerator[Slice, None]:
         """Recursively splits price range until slice count <= 1000 or depth exceeded."""
         if stop_event and stop_event.is_set():
@@ -404,7 +404,7 @@ class SliceGenerator:
 
         mid = (p_min + p_max) // 2
 
-        # Sub-range 1: p_min .. mid
+        # Sub-range 1: p_min .. mid (upper bound is strictly mid, so is_top_range=False)
         count_low = await self.get_count(
             category_id, district_id, room_enum,
             price_from=p_min if p_min > 0 else None,
@@ -432,26 +432,35 @@ class SliceGenerator:
             else:
                 async for s in self._bisect_price(
                     category_type, category_id, district_id, district_name,
-                    room_enum, p_min, mid, depth + 1, stop_event
+                    room_enum, p_min, mid, depth + 1, stop_event,
+                    is_top_range=False,
                 ):
                     yield s
 
         if stop_event and stop_event.is_set():
             return
 
-        # Sub-range 2: mid + 1 .. p_max
+        # Sub-range 2: mid + 1 .. p_max (if is_top_range, price_to is None to cover all expensive listings)
+        high_price_to = None if is_top_range else p_max
         count_high = await self.get_count(
             category_id, district_id, room_enum,
             price_from=mid + 1,
-            price_to=p_max if p_max < 1000000 else None,
+            price_to=high_price_to,
             stop_event=stop_event
         )
 
         if count_high > 0:
-            label_high = (
-                f"{district_name} | {room_enum or category_id} | "
-                f"ціна {mid + 1}..{p_max} (оголошень: {count_high})"
-            )
+            if is_top_range:
+                label_high = (
+                    f"{district_name} | {room_enum or category_id} | "
+                    f"ціна від {mid + 1} (оголошень: {count_high})"
+                )
+            else:
+                label_high = (
+                    f"{district_name} | {room_enum or category_id} | "
+                    f"ціна {mid + 1}..{p_max} (оголошень: {count_high})"
+                )
+
             if count_high <= MAX_OFFSET_LIMIT or depth >= self.max_bisection_depth or (p_max - mid) <= 1000:
                 yield Slice(
                     category_type=category_type,
@@ -460,14 +469,15 @@ class SliceGenerator:
                     district_name=district_name,
                     room_enum=room_enum,
                     price_from=mid + 1,
-                    price_to=p_max if p_max < 1000000 else None,
+                    price_to=high_price_to,
                     visible_total_count=count_high,
                     label=label_high,
                 )
             else:
                 async for s in self._bisect_price(
                     category_type, category_id, district_id, district_name,
-                    room_enum, mid + 1, p_max, depth + 1, stop_event
+                    room_enum, mid + 1, p_max, depth + 1, stop_event,
+                    is_top_range=is_top_range,
                 ):
                     yield s
 
@@ -691,7 +701,7 @@ class OLXScraper:
 
                 # Traverse pages in slice (0, 40, 80... up to visible_total_count or MAX_OFFSET_LIMIT)
                 max_offset = min(s.visible_total_count, MAX_OFFSET_LIMIT)
-                for offset in range(0, max_offset + 1, PAGE_LIMIT):
+                for offset in range(0, max_offset, PAGE_LIMIT):
                     if self.stop_event.is_set():
                         break
 
@@ -767,6 +777,10 @@ class OLXScraper:
                 self.status = "stopped"
             else:
                 self.status = "completed"
+                if max_offers and self.processed_count >= max_offers:
+                    self.total_found = self.processed_count
+                else:
+                    self.total_found = max(self.total_found, self.processed_count)
 
         except Exception as exc:
             logger.exception("Scraper session failed with exception: %s", exc)

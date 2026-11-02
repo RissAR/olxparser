@@ -339,6 +339,113 @@ class TestCommercialNormalizer(unittest.TestCase):
         res_g = normalize_commercial_offer(offer_ground)
         self.assertEqual(res_g["floor"], "0")
 
+    def test_audit_fixes_points_1_to_8(self):
+        parser = get_address_parser()
+
+        # Point 1: Address Parser Anti-Hallucination
+        s1, h1, _ = parser.parse("ЖК Нова Англія")
+        self.assertEqual(s1, "")
+
+        s2, _, _ = parser.parse("Квартира світла та простора")
+        self.assertEqual(s2, "")
+
+        s3, _, _ = parser.parse("Затишна невелика квартира в оренду, Богатирська вул.")
+        self.assertEqual(s3, "вулиця Богатирська")
+
+        s4, h4, _ = parser.parse("Видова квартира в ЖК Кришталеві Джерела, вул. Заболотного 148В")
+        self.assertEqual(s4, "вулиця Заболотного Академіка")
+        self.assertEqual(h4, "148В")
+
+        s5, _, _ = parser.parse("Поруч зона відпочинку")
+        self.assertEqual(s5, "")
+
+        s6, _, _ = parser.parse("Є газова плита")
+        self.assertEqual(s6, "")
+
+        # Point 2: Building type OLX mapping
+        from normalizer import ResidentialNormalizer
+        self.assertEqual(ResidentialNormalizer.extract_building_type({"params": [{"key": "property_type_appartments_sale", "value": "1"}]}, ""), "tsarist")
+        self.assertEqual(ResidentialNormalizer.extract_building_type({"params": [{"key": "property_type_appartments_sale", "value": "2"}]}, ""), "stalinka")
+        self.assertEqual(ResidentialNormalizer.extract_building_type({"params": [{"key": "property_type_appartments_sale", "value": "3"}]}, ""), "khrushchyovka")
+        self.assertEqual(ResidentialNormalizer.extract_building_type({"params": [{"key": "property_type_appartments_sale", "value": "4"}]}, ""), "cheshka")
+        self.assertEqual(ResidentialNormalizer.extract_building_type({"params": [{"key": "property_type_appartments_sale", "value": "5"}]}, ""), "dormitory")
+        self.assertEqual(ResidentialNormalizer.extract_building_type({"params": [{"key": "property_type_appartments_sale", "value": "6"}]}, ""), "special_project")
+        self.assertEqual(ResidentialNormalizer.extract_building_type({"params": [{"key": "property_type_appartments_sale", "value": "8"}]}, ""), "special_project")
+
+        # Point 3: Large total price does not get tagged month_per_m2
+        res_p3 = normalize_commercial_offer({
+            "title": "Оренда великого офісу",
+            "description": "Офіс 640 м2, ціна 400 000 грн (625 грн/м2 з ПДВ)",
+            "params": [
+                {"key": "price", "value": {"value": 400000, "currency": "UAH"}},
+                {"key": "total_area", "value": {"key": "640"}},
+            ],
+        })
+        self.assertEqual(res_p3["price_basis"], "month_total")
+
+        res_p3_usd = normalize_commercial_offer({
+            "title": "Оренда офісу 500 м2",
+            "description": "Ціна 9500$ (19 $/м2)",
+            "params": [
+                {"key": "price", "value": {"value": 9500, "currency": "USD"}},
+                {"key": "total_area", "value": {"key": "500"}},
+            ],
+        })
+        self.assertEqual(res_p3_usd["price_basis"], "month_total")
+
+        # Point 4: Seller owner identification despite business: True
+        res_p4 = normalize_residential_offer({
+            "url": "https://www.olx.ua/d/uk/obyavlenie/vd-vlasnika-bez-komisiyi.html",
+            "business": True,
+            "title": "Оренда 1к квартири від власника!",
+            "params": [],
+        })
+        self.assertEqual(res_p4["seller"], "owner")
+
+        # Developer identification
+        res_p4_dev = normalize_residential_offer({
+            "business": True,
+            "title": "Оренда від забудовника без посередників",
+            "params": [],
+        })
+        self.assertEqual(res_p4_dev["seller"], "developer")
+
+        # Point 5: Business center name anti-hallucination
+        from normalizer import CommercialNormalizer
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("У БЦ є два ліфти."), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("Аренда офиса БЦ 1-2 кабинета 14-30 кв.м."), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("у новому бізнес-центрі\nОренда офісу 1503 м2"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name('БЦ "Gulliver"'), "Gulliver")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ Toronto-Kyiv"), "Toronto-Kyiv")
+
+        # Point 6: Parking spaces false positive on price
+        res_p6 = normalize_commercial_offer({
+            "title": "Центр, м.Олімпійська, оренда приміщення з ремонтом, парковка, 25тис.грн",
+            "params": [],
+        })
+        self.assertEqual(res_p6["parking_spaces"], "")
+
+        # Point 7: Pets array with yes_ prefix
+        res_p7 = normalize_residential_offer({
+            "title": "1к квартира",
+            "params": [{"key": "pets", "value": ["yes_cat", "yes_small_dog"]}],
+        })
+        self.assertEqual(res_p7["pets_allowed"], "yes")
+
+        res_p7_url = normalize_residential_offer({
+            "url": "https://www.olx.ua/d/uk/obyavlenie/mozhna-z-tvarinoyu.html",
+            "title": "1к квартира",
+            "params": [],
+        })
+        self.assertEqual(res_p7_url["pets_allowed"], "yes")
+
+        # Point 8: Rooms 5-room key pyatikomnatnye
+        res_p8 = normalize_residential_offer({
+            "title": "Квартира",
+            "params": [{"key": "number_of_rooms_string", "value": "pyatikomnatnye"}],
+        })
+        self.assertEqual(res_p8["rooms"], "5")
+
 
 if __name__ == "__main__":
     unittest.main()
