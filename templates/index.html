@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="uk" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OLX Kyiv Real Estate Parser</title>
+  
+  <!-- PWA & Meta Tags -->
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes pulse-fast {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .animate-pulse-fast {
+      animation: pulse-fast 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            OLX Parser <span class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">Kyiv Real Estate</span>
+          </h1>
+          <p class="text-xs text-slate-400">Парсер оренди житлової та комерційної нерухомості Києва (10 районів)</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Live Status Badge -->
+        <div id="statusBadge" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 transition-colors">
+          <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+          <span id="statusText">Очікування</span>
+        </div>
+
+        <!-- PWA Install Button -->
+        <button id="pwaInstallBtn" class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white shadow transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>Встановити додаток</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Top KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+          <span>Житлова оренда (БД)</span>
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpiResidentialCount" class="text-2xl font-bold text-white">0</span>
+          <span class="text-xs text-slate-500">оголошень (23 колонки)</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+          <span>Комерційна оренда (БД)</span>
+          <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpiCommercialCount" class="text-2xl font-bold text-white">0</span>
+          <span class="text-xs text-slate-500">оголошень (35 колонок)</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+          <span>Поточна сесія (Збережено)</span>
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpiProcessedCount" class="text-2xl font-bold text-blue-400">0</span>
+          <span class="text-xs text-slate-500">/ <span id="kpiTotalFound">0</span> знайдено</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+          <span>Автозапуск (APScheduler)</span>
+          <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div class="mt-2">
+          <div id="kpiSchedulerTime" class="text-sm font-semibold text-purple-300 truncate">Щопонеділка 03:00</div>
+          <div id="kpiSchedulerNext" class="text-xs text-slate-500 truncate mt-0.5">Очікування розкладу...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main 2-Column Grid: Control & Live Progress -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: Controls (5 cols) -->
+      <div class="lg:col-span-5 space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              Панель керування парсером
+            </h2>
+          </div>
+
+          <!-- Category Selection -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-slate-300">Категорія оголошень</label>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="cursor-pointer border border-slate-700 bg-slate-950/60 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-600/10 rounded-lg p-2.5 text-center text-xs font-medium transition">
+                <input type="radio" name="category" value="all" checked class="hidden">
+                <span>Всі (Обидві)</span>
+              </label>
+              <label class="cursor-pointer border border-slate-700 bg-slate-950/60 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-600/10 rounded-lg p-2.5 text-center text-xs font-medium transition">
+                <input type="radio" name="category" value="residential" class="hidden">
+                <span>Житлова</span>
+              </label>
+              <label class="cursor-pointer border border-slate-700 bg-slate-950/60 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-600/10 rounded-lg p-2.5 text-center text-xs font-medium transition">
+                <input type="radio" name="category" value="commercial" class="hidden">
+                <span>Комерційна</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Limits (Optional / Testing) -->
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label for="maxOffersInput" class="text-xs font-medium text-slate-400 block mb-1">
+                Ліміт оголошень <span class="text-slate-500">(тест)</span>
+              </label>
+              <input type="number" id="maxOffersInput" min="1" placeholder="Всі або напр. 30"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
+            </div>
+            <div>
+              <label for="maxSlicesInput" class="text-xs font-medium text-slate-400 block mb-1">
+                Ліміт зрізів <span class="text-slate-500">(тест)</span>
+              </label>
+              <input type="number" id="maxSlicesInput" min="1" placeholder="Всі або напр. 2"
+                     class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
+            </div>
+          </div>
+
+          <!-- Auto export toggle -->
+          <div class="flex items-center gap-2 pt-1">
+            <input type="checkbox" id="autoExportCheck" checked class="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0">
+            <label for="autoExportCheck" class="text-xs text-slate-300 cursor-pointer select-none">
+              Автоматично експортувати в CSV після завершення збору
+            </label>
+          </div>
+
+          <!-- Buttons -->
+          <div class="pt-2 space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <button id="startBtn" onclick="startScrape()"
+                      class="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-md shadow-blue-600/20 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Запустити збір</span>
+              </button>
+
+              <button id="stopBtn" onclick="stopScrape()" disabled
+                      class="w-full inline-flex items-center justify-center gap-2 bg-red-600/80 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-md transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+                <span>Зупинити</span>
+              </button>
+            </div>
+
+            <button id="exportBtn" onclick="triggerManualExport()"
+                    class="w-full inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-4 py-2 rounded-lg border border-slate-700 transition">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span>Згенерувати CSV зараз з БД</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Weekly Cron Integration Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Щотижневий розклад VDS (Cron)
+            </h3>
+            <span class="text-xs text-emerald-400 font-medium">Активний</span>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Автоматичний запуск кожні 7 днів щопонеділка о 03:00 через внутрішній <b>APScheduler</b> або системний <b>Linux Crontab</b>.
+          </p>
+          <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-slate-300 font-mono text-[11px] flex items-center justify-between gap-2">
+            <span class="truncate">0 3 * * 1 curl -fsS -X POST http://localhost:8000/api/cron/trigger</span>
+            <button onclick="copyCronCommand()" class="text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap font-sans font-medium px-2 py-0.5 rounded bg-blue-500/10">Копіювати</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Live Monitoring & Progress (7 cols) -->
+      <div class="lg:col-span-7 space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-5">
+          <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Моніторинг поточного стану
+            </h2>
+            <span id="sessionTimer" class="text-xs text-slate-400 font-mono">--:--:--</span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between text-xs font-medium">
+              <span id="progressLabel" class="text-slate-300">Прогрес сесії</span>
+              <span id="progressPct" class="text-blue-400 font-semibold font-mono">0%</span>
+            </div>
+            <div class="w-full bg-slate-950 h-3 rounded-full overflow-hidden p-0.5 border border-slate-800">
+              <div id="progressBar" class="bg-gradient-to-r from-blue-600 to-cyan-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Realtime Metrics Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-500">Сесія №</div>
+              <div id="liveSessionId" class="text-base font-bold text-white font-mono mt-0.5">-</div>
+            </div>
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-500">Знайдено</div>
+              <div id="liveFound" class="text-base font-bold text-white font-mono mt-0.5">0</div>
+            </div>
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-500">Збережено в БД</div>
+              <div id="liveProcessed" class="text-base font-bold text-emerald-400 font-mono mt-0.5">0</div>
+            </div>
+            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+              <div class="text-[11px] text-slate-500">Помилки</div>
+              <div id="liveErrors" class="text-base font-bold text-rose-400 font-mono mt-0.5">0</div>
+            </div>
+          </div>
+
+          <!-- Current Active Slice Info -->
+          <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-1">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Поточний зріз пошуку</div>
+            <div id="liveSlice" class="text-xs font-mono text-slate-300 break-words">Немає активного зрізу</div>
+          </div>
+
+          <!-- Error Message Banner (if any) -->
+          <div id="errorBanner" class="hidden bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs p-3 rounded-lg flex items-start gap-2">
+            <svg class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span id="errorMessageText"></span>
+          </div>
+
+          <!-- Status logs/hints -->
+          <div class="text-[11px] text-slate-500 flex items-center justify-between">
+            <span id="liveTimestamp">Оновлено: --:--:--</span>
+            <span class="flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Антифрод: 0.5–1.5s паузи, Chrome TLS
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Exported CSV Files Section -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Згенеровані експортні CSV-файли
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Кодування strictly <b>UTF-8 with BOM (utf-8-sig)</b>, десятковий роздільник крапка (<b>.</b>), без персональних даних</p>
+        </div>
+        <button onclick="fetchFilesList()" class="text-xs text-slate-400 hover:text-white px-2.5 py-1 rounded bg-slate-800 border border-slate-700 flex items-center gap-1 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Оновити список
+        </button>
+      </div>
+
+      <!-- Files Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-950/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="py-2.5 px-4 font-semibold">Назва файлу</th>
+              <th class="py-2.5 px-4 font-semibold">Шаблон / Колонки</th>
+              <th class="py-2.5 px-4 font-semibold">Розмір</th>
+              <th class="py-2.5 px-4 font-semibold">Рядків даних</th>
+              <th class="py-2.5 px-4 font-semibold">Дата оновлення</th>
+              <th class="py-2.5 px-4 font-semibold text-right">Дія</th>
+            </tr>
+          </thead>
+          <tbody id="filesTableBody" class="divide-y divide-slate-800/60 font-mono">
+            <tr>
+              <td colspan="6" class="py-4 text-center text-slate-500 font-sans">Завантаження списку файлів...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4">
+      OLX Kyiv Real Estate Parser &bull; Python FastAPI &bull; APScheduler &bull; SQLite &bull; UTF-8-BOM CSV Export
+    </div>
+  </footer>
+
+  <!-- Frontend JavaScript -->
+  <script>
+    let pollInterval = null;
+    let deferredPrompt = null;
+    let isRunningLocal = false;
+
+    // PWA Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/sw.js')
+          .then(() => console.log('[PWA] Service Worker registered'))
+          .catch(err => console.warn('[PWA] SW failed:', err));
+      });
+    }
+
+    // PWA Install Prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('pwaInstallBtn');
+      if (btn) btn.classList.remove('hidden');
+    });
+
+    document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('[PWA] User response:', outcome);
+        deferredPrompt = null;
+        document.getElementById('pwaInstallBtn').classList.add('hidden');
+      }
+    });
+
+    function copyCronCommand() {
+      const cmd = "0 3 * * 1 curl -fsS -X POST http://localhost:8000/api/cron/trigger";
+      navigator.clipboard.writeText(cmd).then(() => {
+        alert("Команду cron скопійовано в буфер обміну!");
+      });
+    }
+
+    async function startScrape() {
+      const category = document.querySelector('input[name="category"]:checked')?.value || 'all';
+      const maxOffersVal = document.getElementById('maxOffersInput').value;
+      const maxSlicesVal = document.getElementById('maxSlicesInput').value;
+      const autoExport = document.getElementById('autoExportCheck').checked;
+
+      const payload = {
+        category: category,
+        auto_export: autoExport
+      };
+      if (maxOffersVal) payload.max_offers = parseInt(maxOffersVal, 10);
+      if (maxSlicesVal) payload.max_slices = parseInt(maxSlicesVal, 10);
+
+      try {
+        const res = await fetch('/api/scrape/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Помилка: ' + (data.message || data.detail || 'Не вдалося запустити'));
+          return;
+        }
+        await updateStatus();
+      } catch (err) {
+        alert('Помилка з\'єднання: ' + err.message);
+      }
+    }
+
+    async function stopScrape() {
+      try {
+        const res = await fetch('/api/scrape/stop', { method: 'POST' });
+        const data = await res.json();
+        await updateStatus();
+      } catch (err) {
+        alert('Помилка зупинки: ' + err.message);
+      }
+    }
+
+    async function triggerManualExport() {
+      const btn = document.getElementById('exportBtn');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Експорт...</span>';
+      try {
+        const res = await fetch('/api/export', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          await fetchFilesList();
+          await updateStatus();
+          alert('CSV файли успішно згенеровано!');
+        } else {
+          alert('Помилка експорту: ' + (data.detail || data.message));
+        }
+      } catch (err) {
+        alert('Помилка з\'єднання: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    async function updateStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Update status badge
+        const badge = document.getElementById('statusBadge');
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+
+        const isRunning = data.is_running;
+        const status = data.status || 'idle';
+
+        if (isRunning) {
+          badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30';
+          dot.className = 'w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse-fast';
+          text.textContent = 'Збір даних...';
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+        } else if (status === 'stopping') {
+          badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30';
+          dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+          text.textContent = 'Зупиняється';
+          startBtn.disabled = true;
+          stopBtn.disabled = true;
+        } else if (status === 'completed') {
+          badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
+          dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+          text.textContent = 'Завершено';
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        } else if (status === 'failed') {
+          badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30';
+          dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-400';
+          text.textContent = 'Збій';
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        } else {
+          badge.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700';
+          dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-500';
+          text.textContent = 'Очікування';
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        }
+
+        // Live stats
+        document.getElementById('liveSessionId').textContent = data.session_id ? '#' + data.session_id : '-';
+        document.getElementById('liveFound').textContent = (data.total_found || 0).toLocaleString('uk-UA');
+        document.getElementById('liveProcessed').textContent = (data.processed_count || 0).toLocaleString('uk-UA');
+        document.getElementById('liveErrors').textContent = (data.errors_count || 0).toLocaleString('uk-UA');
+        document.getElementById('liveSlice').textContent = data.current_slice || 'Немає активного зрізу';
+
+        // KPI Counts
+        if (data.db_stats) {
+          document.getElementById('kpiResidentialCount').textContent = (data.db_stats.residential_count || 0).toLocaleString('uk-UA');
+          document.getElementById('kpiCommercialCount').textContent = (data.db_stats.commercial_count || 0).toLocaleString('uk-UA');
+        }
+        document.getElementById('kpiProcessedCount').textContent = (data.processed_count || 0).toLocaleString('uk-UA');
+        document.getElementById('kpiTotalFound').textContent = (data.total_found || 0).toLocaleString('uk-UA');
+
+        // Scheduler KPI
+        if (data.scheduler) {
+          if (data.scheduler.next_run_time) {
+            const nextD = new Date(data.scheduler.next_run_time);
+            document.getElementById('kpiSchedulerNext').textContent = 'Наступний запуск: ' + nextD.toLocaleString('uk-UA');
+          } else {
+            document.getElementById('kpiSchedulerNext').textContent = 'Планувальник активний';
+          }
+        }
+
+        // Progress bar calculation
+        const total = data.total_found || 0;
+        const processed = data.processed_count || 0;
+        let pct = 0;
+        if (total > 0) {
+          pct = Math.min(100, Math.round((processed / total) * 100));
+        } else if (isRunning) {
+          pct = 15; // indicator while gathering slices
+        }
+        document.getElementById('progressBar').style.width = pct + '%';
+        document.getElementById('progressPct').textContent = pct + '%';
+
+        // Error message banner
+        const errBanner = document.getElementById('errorBanner');
+        if (data.error_message) {
+          errBanner.classList.remove('hidden');
+          document.getElementById('errorMessageText').textContent = data.error_message;
+        } else {
+          errBanner.classList.add('hidden');
+        }
+
+        // Timestamp
+        document.getElementById('liveTimestamp').textContent = 'Оновлено: ' + new Date().toLocaleTimeString('uk-UA');
+
+        // Check if finished just now to refresh files
+        if (isRunningLocal && !isRunning) {
+          fetchFilesList();
+        }
+        isRunningLocal = isRunning;
+
+      } catch (err) {
+        console.error('Status update failed:', err);
+      }
+    }
+
+    async function fetchFilesList() {
+      try {
+        const res = await fetch('/api/files');
+        if (!res.ok) return;
+        const data = await res.json();
+        const tbody = document.getElementById('filesTableBody');
+        const files = data.files || [];
+
+        if (files.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-500 font-sans">Файли CSV ще не згенеровано. Натисніть "Згенерувати CSV" або запустіть парсинг.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = files.map(f => {
+          const isComm = f.filename.includes('commercial');
+          const tplBadge = isComm
+            ? '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans">Комерційна (35 кол.)</span>'
+            : '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans">Житлова (23 кол.)</span>';
+
+          return `
+            <tr class="hover:bg-slate-800/40 transition">
+              <td class="py-3 px-4 font-semibold text-white flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <span>${f.filename}</span>
+              </td>
+              <td class="py-3 px-4">${tplBadge}</td>
+              <td class="py-3 px-4 text-slate-300">${f.size_formatted}</td>
+              <td class="py-3 px-4 text-emerald-400 font-semibold">${(f.rows_count || 0).toLocaleString('uk-UA')}</td>
+              <td class="py-3 px-4 text-slate-400 text-[11px]">${f.modified_at || '-'}</td>
+              <td class="py-3 px-4 text-right">
+                <a href="/api/download/${encodeURIComponent(f.filename)}" download
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans font-medium bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 transition">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Завантажити</span>
+                </a>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Failed to fetch files:', err);
+      }
+    }
+
+    // Initial load and periodic polling every 3s
+    document.addEventListener('DOMContentLoaded', () => {
+      updateStatus();
+      fetchFilesList();
+      pollInterval = setInterval(updateStatus, 3000);
+    });
+  </script>
+</body>
+</html>
