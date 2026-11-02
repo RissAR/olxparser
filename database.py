@@ -251,6 +251,88 @@ def upsert_commercial_offer(data: Dict[str, Any], raw_data: Optional[str] = None
     conn.close()
 
 
+def upsert_residential_offers_batch(
+    offers: List[Any],
+    db_path: Optional[str] = None
+) -> int:
+    """Batch inserts or updates residential offers in a single transaction."""
+    if not offers:
+        return 0
+    conn = get_db_connection(db_path)
+    with conn:
+        for item in offers:
+            if isinstance(item, tuple):
+                data, raw_data = item
+            else:
+                data, raw_data = item, None
+
+            fields = [col for col in RESIDENTIAL_COLUMNS if col in data]
+            cols = list(fields)
+            placeholders = [":" + col for col in cols]
+            params = {col: data[col] for col in cols}
+
+            if raw_data is not None:
+                cols.append("raw_data")
+                placeholders.append(":raw_data")
+                params["raw_data"] = raw_data
+
+            cols.append("updated_at")
+            placeholders.append("datetime('now', 'localtime')")
+
+            update_cols = [f"{col} = excluded.{col}" for col in cols if col != "url"]
+
+            sql = f"""
+                INSERT INTO residential_offers ({', '.join(cols)})
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT(url) DO UPDATE SET
+                {', '.join(update_cols)};
+            """
+            conn.execute(sql, params)
+    conn.close()
+    return len(offers)
+
+
+def upsert_commercial_offers_batch(
+    offers: List[Any],
+    db_path: Optional[str] = None
+) -> int:
+    """Batch inserts or updates commercial offers in a single transaction."""
+    if not offers:
+        return 0
+    conn = get_db_connection(db_path)
+    with conn:
+        for item in offers:
+            if isinstance(item, tuple):
+                data, raw_data = item
+            else:
+                data, raw_data = item, None
+
+            fields = [col for col in COMMERCIAL_COLUMNS if col in data]
+            cols = list(fields)
+            placeholders = [":" + col for col in cols]
+            params = {col: data[col] for col in cols}
+
+            if raw_data is not None:
+                cols.append("raw_data")
+                placeholders.append(":raw_data")
+                params["raw_data"] = raw_data
+
+            cols.append("updated_at")
+            placeholders.append("datetime('now', 'localtime')")
+
+            update_cols = [f"{col} = excluded.{col}" for col in cols if col != "url"]
+
+            sql = f"""
+                INSERT INTO commercial_offers ({', '.join(cols)})
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT(url) DO UPDATE SET
+                {', '.join(update_cols)};
+            """
+            conn.execute(sql, params)
+    conn.close()
+    return len(offers)
+
+
 def create_scrape_session(category: str, db_path: Optional[str] = None) -> int:
     """Creates a new scrape session record and returns its ID."""
     conn = get_db_connection(db_path)
