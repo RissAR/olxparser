@@ -19,6 +19,7 @@ Features:
 """
 
 import asyncio
+import json
 import logging
 import random
 import re
@@ -41,6 +42,7 @@ from normalizer import (
 )
 
 logger = logging.getLogger("olx_scraper")
+logger.propagate = False
 if not logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
@@ -50,6 +52,7 @@ if not logger.handlers:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+
 
 BASE_API_URL = "https://www.olx.ua/api/v1/offers"
 CITY_ID_KYIV = 268
@@ -728,12 +731,13 @@ class OLXScraper:
                             if not is_valid_rental_offer(raw_offer, s.category_type):
                                 continue
 
+                            raw_json = json.dumps(raw_offer, ensure_ascii=False)
                             if s.category_type == "residential":
                                 norm_data = normalize_residential_offer(raw_offer)
-                                res_batch.append(norm_data)
+                                res_batch.append((norm_data, raw_json))
                             else:
                                 norm_data = normalize_commercial_offer(raw_offer)
-                                comm_batch.append(norm_data)
+                                comm_batch.append((norm_data, raw_json))
 
                         except Exception as parse_err:
                             self.errors_count += 1

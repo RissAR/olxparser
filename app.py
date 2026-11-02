@@ -40,6 +40,7 @@ from scraper import OLXScraper, get_scraper_instance
 
 # Setup logging
 logger = logging.getLogger("olx_web_app")
+logger.propagate = False
 if not logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
@@ -49,6 +50,7 @@ if not logger.handlers:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+
 
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent

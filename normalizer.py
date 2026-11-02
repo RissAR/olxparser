@@ -118,9 +118,9 @@ STREET_SYNONYMS: Dict[str, str] = {
     "здановської": "вулиця Юлії Здановської",
     "тельмана": "вулиця Німецька",
     "німецька": "вулиця Німецька",
-    "патриса лумумбы": "вулиця Іоанна Павла ІІ",
-    "патріса лумумби": "вулиця Іоанна Павла ІІ",
-    "іоанна павла": "вулиця Іоанна Павла ІІ",
+    "патриса лумумбы": "вулиця Іоанна Павла II",
+    "патріса лумумби": "вулиця Іоанна Павла II",
+    "іоанна павла": "вулиця Іоанна Павла II",
     "івана кудрі": "вулиця Джона Маккейна",
     "джона маккейна": "вулиця Джона Маккейна",
     "маккейна": "вулиця Джона Маккейна",
@@ -143,28 +143,31 @@ STREET_SYNONYMS: Dict[str, str] = {
     "богатирська": "вулиця Богатирська",
     "коновальця": "вулиця Євгена Коновальця",
     "євгена коновальця": "вулиця Євгена Коновальця",
-    "теліги": "вулиця Олени Теліги",
-    "олени теліги": "вулиця Олени Теліги",
-    "грінченка": "вулиця Миколи Грінченка",
-    "миколи грінченка": "вулиця Миколи Грінченка",
-    "григоренка": "проспект Петра Григоренка",
-    "петра григоренка": "проспект Петра Григоренка",
-    "глушкова": "проспект Академіка Глушкова",
-    "академіка глушкова": "проспект Академіка Глушкова",
-    "палладіна": "проспект Академіка Палладіна",
-    "академіка палладіна": "проспект Академіка Палладіна",
-    "вільямса": "вулиця Академіка Вільямса",
-    "академіка вільямса": "вулиця Академіка Вільямса",
-    "руставелі": "вулиця Шота Руставелі",
-    "шота руставелі": "вулиця Шота Руставелі",
+    "теліги": "вулиця Теліги Олени",
+    "олени теліги": "вулиця Теліги Олени",
+    "грінченка": "вулиця Грінченка Миколи",
+    "миколи грінченка": "вулиця Грінченка Миколи",
+    "григоренка": "проспект Григоренка Петра",
+    "петра григоренка": "проспект Григоренка Петра",
+    "глушкова": "проспект Глушкова Академіка",
+    "академіка глушкова": "проспект Глушкова Академіка",
+    "палладіна": "проспект Палладіна Академіка",
+    "академіка палладіна": "проспект Палладіна Академіка",
+    "вільямса": "вулиця Вільямса Академіка",
+    "академіка вільямса": "вулиця Вільямса Академіка",
+    "руставелі": "вулиця Руставелі Шота",
+    "шота руставелі": "вулиця Руставелі Шота",
     "малевича": "вулиця Казимира Малевича",
     "казимира малевича": "вулиця Казимира Малевича",
     "тютюнника": "вулиця Василя Тютюнника",
     "василя тютюнника": "вулиця Василя Тютюнника",
-    "гетьмана": "вулиця Вадима Гетьмана",
-    "вадима гетьмана": "вулиця Вадима Гетьмана",
+    "гетьмана": "вулиця Гетьмана Вадима",
+    "вадима гетьмана": "вулиця Гетьмана Вадима",
     "голего": "вулиця Миколи Голего",
     "миколи голего": "вулиця Миколи Голего",
+    "верхогляда": "вулиця Драгомирова Михайла",
+    "андрія верхогляда": "вулиця Драгомирова Михайла",
+    "драгомирова": "вулиця Драгомирова Михайла",
 }
 
 # Ambiguous single-word street names that cause hallucinations without explicit street indicators
@@ -179,6 +182,8 @@ AMBIGUOUS_STREET_WORDS: Set[str] = {
     "газова", "газовий",
     "відпочинку",
     "вокзальна", "деміївська", "голосіївська", "голосіївський", "олімпійська",
+    "васильківська", "володимирський", "мальовничий", "мальовнича", "моторний", "моторна",
+    "автономний", "автономна",
     "лугова", "садова", "лісова", "польова", "шкільна", "молодіжна", "квіткова", "сонячна",
     "мирна", "спортивна", "промислова", "будівельників", "червона",
 }
@@ -187,7 +192,8 @@ AMBIGUOUS_STREET_WORDS: Set[str] = {
 HOUSE_NUMBER_REGEX = re.compile(
     r"""
     ^[,\s./_–—]*
-    (?:буд(?:инок)?\.?|дом|д\.?|№)?\s*
+    (?:(?:вул|вулиц[яіе]|ул|улиц[ае]|просп|проспект[уі]?|пр-т|бульв|бульвар[уі]?|б-р|пров|провул(?:ок|ка|ку)|пер|переул(?:ок|ка|ку)|узвіз|набережн[аея]|шосе)\.?\s*,?\s*)?
+    (?:буд(?:инок)?\.?|дом|д\.?|б\.?|№)?\s*
     (
         \d{1,4}
         (?:[/-]\d{1,4})?
@@ -202,12 +208,15 @@ HOUSE_NUMBER_REGEX = re.compile(
 
 
 def strip_html(text: Optional[str]) -> str:
-    """Removes HTML tags and decodes HTML entities."""
+    """Removes HTML tags and decodes HTML entities while preserving line boundaries."""
     if not text:
         return ""
-    clean = re.sub(r"<[^>]+>", " ", text)
+    clean = re.sub(r"<(?:br|/p|/div|/li|/h\d|/tr)[^>]*>", "\n", text, flags=re.IGNORECASE)
+    clean = re.sub(r"<[^>]+>", " ", clean)
     clean = html.unescape(clean)
-    return re.sub(r"\s+", " ", clean).strip()
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in clean.split("\n")]
+    return "\n".join(line for line in lines if line)
+
 
 
 def clean_number_str(val: Any) -> str:
@@ -234,6 +243,56 @@ def clean_int_str(val: Any) -> str:
         return ""
 
 
+PREFIX_TYPE_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\b(?:вул|вулиц[яіе]|ул|улиц[ае])\.?\s*$", re.IGNORECASE), "вулиця"),
+    (re.compile(r"\b(?:пров|провул(?:ок|ка|ку)|пер|переул(?:ок|ка|ку))\.?\s*$", re.IGNORECASE), "провулок"),
+    (re.compile(r"\b(?:просп|проспект[уі]?|пр-т)\.?\s*$", re.IGNORECASE), "проспект"),
+    (re.compile(r"\b(?:бульв|бульвар[уі]?|б-р)\.?\s*$", re.IGNORECASE), "бульвар"),
+    (re.compile(r"\b(?:площ[аі]|майдан|пл)\.?\s*$", re.IGNORECASE), "площа"),
+    (re.compile(r"\b(?:набережн[аея])\.?\s*$", re.IGNORECASE), "набережна"),
+    (re.compile(r"\b(?:узвіз|спуск)\.?\s*$", re.IGNORECASE), "узвіз"),
+    (re.compile(r"\b(?:шосе)\.?\s*$", re.IGNORECASE), "шосе"),
+    (re.compile(r"\b(?:але[яі])\.?\s*$", re.IGNORECASE), "алея"),
+    (re.compile(r"\b(?:тупик)\.?\s*$", re.IGNORECASE), "тупик"),
+    (re.compile(r"\b(?:проїзд)\.?\s*$", re.IGNORECASE), "проїзд"),
+]
+
+SUFFIX_TYPE_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"^\s*(?:вул|вулиц[яіе]|ул|улиц[ае])\.?", re.IGNORECASE), "вулиця"),
+    (re.compile(r"^\s*(?:пров|провул(?:ок|ка|ку)|пер|переул(?:ок|ка|ку))\.?", re.IGNORECASE), "провулок"),
+    (re.compile(r"^\s*(?:просп|проспект[уі]?|пр-т)\.?", re.IGNORECASE), "проспект"),
+    (re.compile(r"^\s*(?:бульв|бульвар[уі]?|б-р)\.?", re.IGNORECASE), "бульвар"),
+    (re.compile(r"^\s*(?:площ[аі]|майдан|пл)\.?", re.IGNORECASE), "площа"),
+    (re.compile(r"^\s*(?:набережн[аея])\.?", re.IGNORECASE), "набережна"),
+    (re.compile(r"^\s*(?:узвіз|спуск)\.?", re.IGNORECASE), "узвіз"),
+    (re.compile(r"^\s*(?:шосе)\.?", re.IGNORECASE), "шосе"),
+    (re.compile(r"^\s*(?:але[яі])\.?", re.IGNORECASE), "алея"),
+    (re.compile(r"^\s*(?:тупик)\.?", re.IGNORECASE), "тупик"),
+    (re.compile(r"^\s*(?:проїзд)\.?", re.IGNORECASE), "проїзд"),
+]
+
+TITLES_SET: Set[str] = {
+    "академіка", "професора", "генерала", "маршала", "архітектора",
+    "адмірала", "композитора", "письменника", "гетьмана", "інженера", "полковника"
+}
+
+TYPE_PRIORITY: Dict[str, int] = {
+    "вулиця": 10,
+    "проспект": 9,
+    "бульвар": 8,
+    "набережна": 7,
+    "шосе": 6,
+    "площа": 5,
+    "майдан": 5,
+    "узвіз": 4,
+    "алея": 3,
+    "провулок": 2,
+    "проїзд": 1,
+    "тупик": 1,
+    "дорога": 1,
+}
+
+
 class KyivAddressParser:
     """
     High-precision Kyiv Address Parser.
@@ -246,19 +305,26 @@ class KyivAddressParser:
         self.streets_data = {}
         self.canonical_to_districts: Dict[str, List[str]] = {}
         self.search_index: Dict[str, str] = {}
+        self.typed_streets: Dict[Tuple[str, str], str] = {}
 
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 self.streets_data = json.load(f)
 
             for s in self.streets_data.get("streets", []):
-                canonical = s.get("canonical", "").strip()
+                canonical = s.get("canonical", "").replace("\u0301", "").strip()
                 districts = s.get("districts", [])
                 if canonical:
                     self.canonical_to_districts[canonical] = districts
 
-                name = s.get("name", "").strip()
+                name = s.get("name", "").replace("\u0301", "").strip()
                 st_type = s.get("type", "").strip().lower()
+
+                if st_type:
+                    self.typed_streets[(name.lower(), st_type)] = canonical
+                    for a in s.get("aliases", []):
+                        a_clean = a.replace("\u0301", "").strip().lower()
+                        self.typed_streets[(a_clean, st_type)] = canonical
 
                 # Invert 2-word names (e.g. "Заболотного Академіка" <-> "Академіка Заболотного")
                 parts = name.split()
@@ -267,24 +333,83 @@ class KyivAddressParser:
                     self.search_index[f"{p1} {p2}"] = canonical
                     self.search_index[f"{p2} {p1}"] = canonical
                     if st_type:
+                        self.typed_streets[(f"{p1} {p2}", st_type)] = canonical
+                        self.typed_streets[(f"{p2} {p1}", st_type)] = canonical
                         self.search_index[f"{st_type} {p1} {p2}"] = canonical
                         self.search_index[f"{st_type} {p2} {p1}"] = canonical
                         self.search_index[f"{p1} {p2} {st_type}"] = canonical
                         self.search_index[f"{p2} {p1} {st_type}"] = canonical
+                        if st_type == "вулиця":
+                            self.search_index[f"вул {p1} {p2}"] = canonical
+                            self.search_index[f"вул {p2} {p1}"] = canonical
+                        elif st_type == "проспект":
+                            self.search_index[f"просп {p1} {p2}"] = canonical
+                            self.search_index[f"просп {p2} {p1}"] = canonical
+                        elif st_type == "бульвар":
+                            self.search_index[f"бул {p1} {p2}"] = canonical
+                            self.search_index[f"бул {p2} {p1}"] = canonical
+                        elif st_type == "провулок":
+                            self.search_index[f"пров {p1} {p2}"] = canonical
+                            self.search_index[f"пров {p2} {p1}"] = canonical
 
-            # Fix missing district for known streets
-            if "вулиця Михайла Максимовича" in self.canonical_to_districts and not self.canonical_to_districts["вулиця Михайла Максимовича"]:
-                self.canonical_to_districts["вулиця Михайла Максимовича"] = ["Голосіївський"]
+                    # Title streets: generate 1-gram surname index for 88 title streets
+                    surname = None
+                    if p1 in TITLES_SET:
+                        surname = p2
+                    elif p2 in TITLES_SET:
+                        surname = p1
+                    if surname and len(surname) >= 4:
+                        if st_type:
+                            self.typed_streets[(surname, st_type)] = canonical
+                            self.search_index[f"{st_type} {surname}"] = canonical
+                            if st_type == "вулиця":
+                                self.search_index[f"вул {surname}"] = canonical
+                            elif st_type == "проспект":
+                                self.search_index[f"просп {surname}"] = canonical
+                            elif st_type == "бульвар":
+                                self.search_index[f"бул {surname}"] = canonical
+                            elif st_type == "провулок":
+                                self.search_index[f"пров {surname}"] = canonical
+                        if surname not in self.search_index:
+                            self.search_index[surname] = canonical
 
-            # Merge search index from json
+            # Merge search index from json with type priority
             for k, v in self.streets_data.get("search_index", {}).items():
-                k_clean = k.strip().lower()
+                k_clean = k.replace("\u0301", "").strip().lower()
+                v_clean = v.replace("\u0301", "").strip()
                 if len(k_clean) >= 4:
-                    self.search_index[k_clean] = v.strip()
+                    curr_canon = self.search_index.get(k_clean)
+                    if curr_canon:
+                        curr_type = curr_canon.split()[0].lower() if curr_canon else ""
+                        new_type = v_clean.split()[0].lower() if v_clean else ""
+                        if TYPE_PRIORITY.get(new_type, 0) > TYPE_PRIORITY.get(curr_type, 0):
+                            self.search_index[k_clean] = v_clean
+                    else:
+                        self.search_index[k_clean] = v_clean
+                    new_type = v_clean.split()[0].lower() if v_clean else ""
+                    if new_type:
+                        self.typed_streets[(k_clean, new_type)] = v_clean
 
         # Merge manual synonyms and known renames
         for k, v in STREET_SYNONYMS.items():
-            self.search_index[k.lower()] = v
+            k_clean = k.lower()
+            self.search_index[k_clean] = v
+            st_type = v.split()[0].lower() if v else ""
+            if st_type:
+                self.typed_streets[(k_clean, st_type)] = v
+
+        # Fix missing district for known streets
+        dist_fixes = {
+            "вулиця Михайла Максимовича": ["Голосіївський"],
+            "вулиця Джона Маккейна": ["Печерський"],
+            "вулиця Іоанна Павла II": ["Печерський"],
+            "вулиця Всеволода Змієнка": ["Подільський"],
+            "вулиця Андрія Верхогляда": ["Печерський"],
+            "вулиця Драгомирова Михайла": ["Печерський"],
+        }
+        for st_name, dsts in dist_fixes.items():
+            if st_name not in self.canonical_to_districts or not self.canonical_to_districts[st_name]:
+                self.canonical_to_districts[st_name] = dsts
 
     def extract_street_and_house(self, text: str) -> Tuple[str, str]:
         """
@@ -311,7 +436,6 @@ class KyivAddressParser:
                 if len(phrase) < 4 or phrase not in self.search_index:
                     continue
 
-                canonical = self.search_index[phrase]
                 start_char = token_matches[i].start()
                 end_char = token_matches[i + length - 1].end()
 
@@ -319,16 +443,23 @@ class KyivAddressParser:
                 prefix_ctx = clean_text[max(0, start_char - 30):start_char].lower()
                 suffix_ctx = clean_text[end_char:min(len(clean_text), end_char + 30)].lower()
 
-                # 1. Reject if preceded by metro station indicator
-                if re.search(r"\b(?:метро|ст\.?\s*м\.?|станці[яєї]\s+метро|м\.?)\s*$", prefix_ctx):
+                # 1. Reject if preceded or followed by metro station indicator
+                if re.search(
+                    r"\b(?:метро|ст\.?\s*м\.?|станці[яєїією]\s+(?:метро)?|м\.?|біля\s+метро|до\s+метро(?:\s+\d+\s*(?:хв|хвилин|мин))?)\s*[:\-–—]?\s*(?:[\"«„'’(][^\"»“'’)]*|\s*)$",
+                    prefix_ctx
+                ):
+                    continue
+                if re.search(r"^\s*[\"»“'’)]?\s*(?:-\s*\d+\s*(?:хв|хвилин|мин)\s*(?:пішки|пешком|до\s+метро)|метро|станці[яєїі])\b", suffix_ctx):
                     continue
 
-                # 2. Reject if preceded by residential complex without street keyword
-                if re.search(r"\b(?:жк|житлов(?:ий|ого|ому)\s+комплекс[уі]?|клубн(?:ий|ого|ому)\s+будинк[уі]?)\s*$", prefix_ctx):
+                # 2. Reject if preceded by residential/business complex without street keyword
+                if re.search(r"\b(?:жк|житлов\w*\s+комплекс\w*|клубн\w*\s+будинк\w*|комплекс\w*(?:\s+\w+){0,3}?)\s*[\"«„'’]?\s*$", prefix_ctx):
                     continue
 
-                # 3. Reject if preceded by recreation/park indicator
-                if re.search(r"\b(?:зона|парк|урочище)\s*$", prefix_ctx):
+                # 3. Reject if preceded or followed by recreation/park indicator
+                if re.search(r"\b(?:зон[а-я]*|парк[а-я]*|урочищ[а-я]*)(?:\s+(?:для|із|з|та|відпочинку))*\s*[\"«„'’]?\s*$", prefix_ctx):
+                    continue
+                if re.search(r"^\s*[\"»“'’]?\s*(?:парк[а-я]*|урочищ[а-я]*)\b", suffix_ctx):
                     continue
 
                 # 4. Reject if followed by district indicator
@@ -345,28 +476,55 @@ class KyivAddressParser:
                     suffix_ctx
                 ))
 
+                has_loc_prep = bool(re.search(r"\b(?:на|по)\s*$", prefix_ctx))
+
                 phrase_has_indicator = any(
                     w in ("вулиця", "вул", "проспект", "просп", "шосе", "бульвар", "бульв", "провулок", "пров", "узвіз", "набережна", "площа", "майдан", "тракт", "тупик", "алея")
                     for w in phrase.split()
                 )
 
-                # 5. Ambiguous single-word streets MUST have a street indicator
-                if length == 1 and phrase in AMBIGUOUS_STREET_WORDS:
-                    if not (has_prefix_ind or has_suffix_ind or phrase_has_indicator):
-                        continue
-
                 # Extract house number from tail
                 tail = clean_text[end_char:]
                 house = self._extract_house_from_tail(tail)
+
+                # 5. Single-word matches (length == 1) MUST have an explicit street indicator, house number, or location preposition
+                if length == 1:
+                    if phrase in AMBIGUOUS_STREET_WORDS:
+                        if not (phrase_has_indicator or has_prefix_ind or has_suffix_ind):
+                            continue
+                    elif not (phrase_has_indicator or has_prefix_ind or has_suffix_ind or house or has_loc_prep):
+                        continue
+
+                # Determine detected street type if prefix/suffix indicator is present
+                detected_type = ""
+                for pat, t in PREFIX_TYPE_PATTERNS:
+                    if pat.search(prefix_ctx):
+                        detected_type = t
+                        break
+                if not detected_type:
+                    for pat, t in SUFFIX_TYPE_PATTERNS:
+                        if pat.search(suffix_ctx):
+                            detected_type = t
+                            break
+
+                if detected_type and (phrase, detected_type) in self.typed_streets:
+                    canonical = self.typed_streets[(phrase, detected_type)]
+                else:
+                    canonical = self.search_index[phrase]
 
                 # Calculate confidence score
                 score = 0
                 if phrase_has_indicator or has_prefix_ind or has_suffix_ind:
                     score += 100
+                elif has_loc_prep:
+                    score += 60
                 if house:
                     score += 50
                 if length >= 2:
                     score += 50 * length
+
+                if score <= 0:
+                    continue
 
                 candidates.append((score, -start_char, length, canonical, house))
 
@@ -1109,11 +1267,28 @@ class CommercialNormalizer(BaseNormalizer):
     @staticmethod
     def extract_business_center_name(text: str) -> str:
         """Extracts Business Center name (e.g. 'Gulliver', 'Парус')."""
+        generic_words = {
+            "є", "на", "в", "у", "з", "по", "біля", "від", "до", "для", "та", "і", "або",
+            "новий", "новому", "новій", "нового", "нові", "сучасний", "сучасному", "сучасна", "сучасні",
+            "класу", "клас", "оренда", "аренда", "офіс", "офис", "офісів", "офісу", "офиса",
+            "кабинет", "кабінет", "приміщення", "поверх", "ліфт", "ліфти", "паркінг", "парковка",
+            "поштомат", "додатково", "комунальні", "квартира", "метро", "вул", "вулиця",
+            "київ", "киев", "kyiv", "kiev",
+            "голосіївський", "голосеевский", "печерський", "печерский", "шевченківський", "шевченковский",
+            "подільський", "подольский", "оболонський", "оболонский", "дарницький", "дарницкий",
+            "дніпровський", "днепровский", "деснянський", "деснянский", "солом'янський", "соломенский",
+            "святошинський", "святошинский",
+            "голосієво", "голосеево", "позняки", "осокорки", "оболонь", "поділ", "подол", "печерськ", "печерск",
+            "центр", "район", "р-н", "пропонується", "предлагается", "здається", "сдается",
+            "власник", "собственник", "без", "комісії", "комиссии"
+        }
+
         # 1. Quoted name after BC indicator (most accurate)
         m_q = re.search(r'(?:БЦ|бізнес[- ]центр[аіе]?|бизнес[- ]центр[ае]?|ТОЦ|ТРЦ)\s*["«„]([A-Za-zА-Яа-яІіЇїЄє0-9\s\.\-_]{2,40}?)["»“]', text)
         if m_q:
             bc = m_q.group(1).strip()
-            if bc and not bc.isdigit():
+            tokens = [t.lower() for t in re.findall(r"\w+", bc)]
+            if bc and not bc.isdigit() and tokens and not all(t in generic_words for t in tokens):
                 return bc
 
         # 2. Unquoted proper noun on the same line (no newlines) starting with capital letter
@@ -1121,16 +1296,12 @@ class CommercialNormalizer(BaseNormalizer):
         if m_u:
             bc = m_u.group(1).strip()
             bc = re.sub(r"[,\.;:]+$", "", bc).strip()
-            generic_words = {
-                "є", "на", "в", "у", "з", "по", "біля", "від", "до", "для", "та", "і", "або",
-                "новий", "новому", "новій", "класу", "клас", "оренда", "аренда", "офіс", "офис",
-                "кабинет", "кабінет", "приміщення", "поверх", "ліфт", "ліфти", "паркінг", "парковка",
-                "поштомат", "додатково", "комунальні", "квартира", "метро", "вул", "вулиця"
-            }
-            tokens = [t.lower() for t in re.findall(r"\w+", bc)]
-            if tokens and not any(t in generic_words for t in tokens):
-                if 2 <= len(bc) <= 40 and not bc.isdigit():
-                    return bc
+            tail_ctx = text[m_u.end():min(len(text), m_u.end() + 20)].lower()
+            if not re.match(r"^\s*(?:район[уі]?|р-н[уі]?|метро)", tail_ctx):
+                tokens = [t.lower() for t in re.findall(r"\w+", bc) if not t.isdigit()]
+                if tokens and any(t not in generic_words for t in tokens):
+                    if 2 <= len(bc) <= 40 and not bc.isdigit():
+                        return bc
 
         return ""
 

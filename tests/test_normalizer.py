@@ -446,6 +446,78 @@ class TestCommercialNormalizer(unittest.TestCase):
         })
         self.assertEqual(res_p8["rooms"], "5")
 
+    def test_audit_bugs_1_to_4(self):
+        """Dedicated tests for audit bugs 1, 2, 3, 4."""
+        parser = get_address_parser()
+
+        # Bug 1: 1-gram hallucinations, recreation zones, complex, and metro
+        s, h, _ = parser.parse("Сучасний дизайнерський автономний офіс Голосієво 318 м2... Вид на мальовничий Голосіївський парк")
+        self.assertEqual(s, "")
+
+        s, h, _ = parser.parse("Двокімнатна в новобудові автономний ремонт моторний поверх")
+        self.assertEqual(s, "")
+
+        s, h, _ = parser.parse("Оренда квартири в ЖК Республіка, багато зон для відпочинку")
+        self.assertEqual(s, "")
+
+        s, h, _ = parser.parse("Оренда квартири в ЖК Республіка, із зонами відпочинку поруч")
+        self.assertEqual(s, "")
+
+        s, h, _ = parser.parse("Оренда 1-к автономної квартири Володимирський")
+        self.assertEqual(s, "")
+
+        s, h, _ = parser.parse("комплексі бізнес-класу «Володимирський»")
+        self.assertEqual(s, "")
+
+        s, h, _ = parser.parse("ЖК «Нова Англія», Метро «Васильківська» — 10 хвилин пішки")
+        self.assertEqual(s, "")
+
+        s, h, _ = parser.parse("поруч зі станціями метро «Площа Українських Героїв»")
+        self.assertEqual(s, "")
+
+        # Bug 2: Type collisions (вулиця vs площа/провулок)
+        s, h, d = parser.parse("вул. Голосіївська 13Б")
+        self.assertEqual(s, "вулиця Голосіївська")
+        self.assertEqual(h, "13Б")
+        self.assertEqual(d, "Голосіївський")
+
+        s, h, d = parser.parse("вул. Деміївська, 16")
+        self.assertEqual(s, "вулиця Деміївська")
+        self.assertEqual(h, "16")
+        self.assertEqual(d, "Голосіївський")
+
+        # Bug 3: Accents, repeated street keyword, title streets, canonical naming
+        s, h, d = parser.parse("Оренда офісу, Поділ, по вул.Хорива б.25/12")
+        self.assertEqual(s, "вулиця Хорива")
+        self.assertEqual(h, "25/12")
+        self.assertEqual(d, "Подільський")
+
+        s, h, d = parser.parse("Оренда. 2-кімнт. вул.Володимиро-Либідська вул.,16 Метро Палац Україна")
+        self.assertEqual(s, "вулиця Володимиро-Либідська")
+        self.assertEqual(h, "16")
+
+        s, h, d = parser.parse("вул. Булаховського 5")
+        self.assertEqual(s, "вулиця Булаховського Академіка")
+        self.assertEqual(h, "5")
+        self.assertEqual(d, "Святошинський")
+
+        s, h, d = parser.parse("вул. Вернадського, 10")
+        self.assertEqual(s, "бульвар Вернадського Академіка")
+        self.assertEqual(h, "10")
+        self.assertEqual(d, "Святошинський")
+
+        s, h, d = parser.parse("Оренда квартири, вул. Глушкова 9")
+        self.assertEqual(s, "проспект Глушкова Академіка")
+        self.assertEqual(h, "9")
+        self.assertEqual(d, "Голосіївський")
+
+        # Bug 4: Business center hallucinations
+        from normalizer import CommercialNormalizer
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("Без% аренда офиса отдельный блок 2-3 каб, 66-90 кв.м Бизнес-центр Киев метро Голосеевский"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("бізнес-центр Голосіївський район"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("сучасний бізнес-центр\nГолосіївський район"), "")
+
 
 if __name__ == "__main__":
     unittest.main()
+
