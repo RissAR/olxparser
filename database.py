@@ -411,6 +411,26 @@ def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
+def get_all_residential_offers(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retrieves all residential offers ordered by seen_date DESC, created_at DESC."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    cols = ", ".join(RESIDENTIAL_COLUMNS)
+    rows = conn.execute(f"SELECT {cols} FROM residential_offers ORDER BY seen_date DESC, created_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_commercial_offers(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retrieves all commercial offers ordered by seen_date DESC, created_at DESC."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    cols = ", ".join(COMMERCIAL_COLUMNS)
+    rows = conn.execute(f"SELECT {cols} FROM commercial_offers ORDER BY seen_date DESC, created_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 if __name__ == "__main__":
     init_db()
     print("Database initialized successfully at:", DEFAULT_DB_PATH)
