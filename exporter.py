@@ -89,6 +89,16 @@ def format_csv_value(val: Any, col_name: str = "") -> str:
                     return str(int(f))
             except ValueError:
                 pass
+        elif col_name in FLOAT_LIKE_COLUMNS:
+            try:
+                f = float(s.replace(",", "."))
+                if f.is_integer():
+                    if col_name == "ceiling_height_m":
+                        return f"{f:.1f}"
+                    return str(int(f))
+                return f"{f:.2f}".rstrip("0").rstrip(".")
+            except ValueError:
+                pass
         return s
 
     return str(val).strip()

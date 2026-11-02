@@ -42,6 +42,16 @@
     .animate-pulse-fast {
       animation: pulse-fast 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
+    /* Hide native browser spin buttons (Windows XP style) on number inputs */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
@@ -183,8 +193,13 @@
                      class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
             </div>
             <div>
-              <label for="maxSlicesInput" class="text-xs font-medium text-slate-400 block mb-1">
-                Ліміт зрізів <span class="text-slate-500">(тест)</span>
+              <label for="maxSlicesInput" class="text-xs font-medium text-slate-400 mb-1 flex items-center justify-between">
+                <span>Ліміт фільтрів / зрізів <span class="text-slate-500">(тест)</span></span>
+                <span class="cursor-help text-slate-500 hover:text-slate-300 transition" title="1 зріз = комбінація району, типу нерухомості (напр. 1-кімнатні) та цінового діапазону">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
               </label>
               <input type="number" id="maxSlicesInput" min="1" placeholder="Всі або напр. 2"
                      class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
@@ -231,25 +246,32 @@
           </div>
         </div>
 
-        <!-- Weekly Cron Integration Card -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <!-- Weekly Cron Integration Accordion -->
+        <details class="group bg-slate-900 border border-slate-800 rounded-xl shadow-sm transition overflow-hidden">
+          <summary class="p-4 flex items-center justify-between cursor-pointer select-none list-none hover:bg-slate-800/40 transition">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              Щотижневий розклад VDS (Cron)
-            </h3>
-            <span class="text-xs text-emerald-400 font-medium">Активний</span>
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Розклад VDS (Cron)</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium border border-emerald-500/20">Щопонеділка 03:00</span>
+              <svg class="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </summary>
+          <div class="p-4 pt-1 space-y-3 border-t border-slate-800/60 bg-slate-950/30">
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Автоматичний запуск кожні 7 днів щопонеділка о 03:00 через внутрішній <b>APScheduler</b> або системний <b>Linux Crontab</b> на VDS.
+            </p>
+            <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-slate-300 font-mono text-[11px] flex items-center justify-between gap-2">
+              <span class="truncate">0 3 * * 1 curl -fsS -X POST http://localhost:8000/api/cron/trigger</span>
+              <button onclick="copyCronCommand()" class="text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap font-sans font-medium px-2 py-0.5 rounded bg-blue-500/10">Копіювати</button>
+            </div>
           </div>
-          <p class="text-xs text-slate-400 leading-relaxed">
-            Автоматичний запуск кожні 7 днів щопонеділка о 03:00 через внутрішній <b>APScheduler</b> або системний <b>Linux Crontab</b>.
-          </p>
-          <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-slate-300 font-mono text-[11px] flex items-center justify-between gap-2">
-            <span class="truncate">0 3 * * 1 curl -fsS -X POST http://localhost:8000/api/cron/trigger</span>
-            <button onclick="copyCronCommand()" class="text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap font-sans font-medium px-2 py-0.5 rounded bg-blue-500/10">Копіювати</button>
-          </div>
-        </div>
+        </details>
       </div>
 
       <!-- Right Column: Live Monitoring & Progress (7 cols) -->
@@ -407,11 +429,56 @@
       }
     });
 
+    // Toast Notification System
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      const isSuccess = type === 'success';
+      toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-xs font-medium border transition-all duration-300 transform translate-y-[-10px] opacity-0 ${
+        isSuccess
+          ? 'bg-slate-900 border-emerald-500/40 text-emerald-300 shadow-emerald-500/10'
+          : 'bg-slate-900 border-rose-500/40 text-rose-300 shadow-rose-500/10'
+      }`;
+      const icon = isSuccess
+        ? `<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`
+        : `<svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>`;
+      toast.innerHTML = `${icon}<span>${message}</span>`;
+      container.appendChild(toast);
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+      });
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-5px]');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
     function copyCronCommand() {
       const cmd = "0 3 * * 1 curl -fsS -X POST http://localhost:8000/api/cron/trigger";
-      navigator.clipboard.writeText(cmd).then(() => {
-        alert("Команду cron скопійовано в буфер обміну!");
-      });
+      const notify = () => showToast("Команду Cron скопійовано в буфер обміну!", "success");
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cmd).then(notify).catch(() => fallbackCopy(cmd));
+      } else {
+        fallbackCopy(cmd);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast("Команду Cron скопійовано в буфер обміну!", "success");
+      } catch (e) {
+        prompt("Скопіюйте команду вручну:", text);
+      }
+      document.body.removeChild(ta);
     }
 
     async function startScrape() {
@@ -435,12 +502,13 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          alert('Помилка: ' + (data.message || data.detail || 'Не вдалося запустити'));
+          showToast('Помилка: ' + (data.message || data.detail || 'Не вдалося запустити'), 'error');
           return;
         }
+        showToast('Парсинг успішно запущено!', 'success');
         await updateStatus();
       } catch (err) {
-        alert('Помилка з\'єднання: ' + err.message);
+        showToast('Помилка з\'єднання: ' + err.message, 'error');
       }
     }
 
@@ -448,9 +516,10 @@
       try {
         const res = await fetch('/api/scrape/stop', { method: 'POST' });
         const data = await res.json();
+        showToast('Зупинку парсингу ініційовано', 'success');
         await updateStatus();
       } catch (err) {
-        alert('Помилка зупинки: ' + err.message);
+        showToast('Помилка зупинки: ' + err.message, 'error');
       }
     }
 
@@ -465,12 +534,12 @@
         if (res.ok) {
           await fetchFilesList();
           await updateStatus();
-          alert('CSV файли успішно згенеровано!');
+          showToast('CSV файли успішно згенеровано!', 'success');
         } else {
-          alert('Помилка експорту: ' + (data.detail || data.message));
+          showToast('Помилка експорту: ' + (data.detail || data.message), 'error');
         }
       } catch (err) {
-        alert('Помилка з\'єднання: ' + err.message);
+        showToast('Помилка з\'єднання: ' + err.message, 'error');
       } finally {
         btn.disabled = false;
         btn.innerHTML = origText;
@@ -632,13 +701,23 @@
               <td class="py-3 px-4 text-emerald-400 font-semibold">${(f.rows_count || 0).toLocaleString('uk-UA')}</td>
               <td class="py-3 px-4 text-slate-400 text-[11px]">${f.modified_at || '-'}</td>
               <td class="py-3 px-4 text-right">
-                <a href="/api/download/${encodeURIComponent(f.filename)}" download
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans font-medium bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 transition">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  <span>Завантажити</span>
-                </a>
+                <div class="inline-flex items-center gap-2">
+                  <button onclick="openPreview('${encodeURIComponent(f.filename)}')"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition">
+                    <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>Перегляд</span>
+                  </button>
+                  <a href="/api/download/${encodeURIComponent(f.filename)}" download
+                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans font-medium bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Завантажити</span>
+                  </a>
+                </div>
               </td>
             </tr>
           `;
@@ -648,6 +727,86 @@
       }
     }
 
+    // CSV Quick Preview Modal logic
+    async function openPreview(filename) {
+      const modal = document.getElementById('previewModal');
+      const title = document.getElementById('previewFilename');
+      const container = document.getElementById('previewTableContainer');
+      const countEl = document.getElementById('previewRowCount');
+
+      title.textContent = decodeURIComponent(filename);
+      countEl.textContent = 'Завантаження...';
+      container.innerHTML = `
+        <div class="flex items-center justify-center py-12 text-slate-400">
+          <svg class="animate-spin w-6 h-6 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span>Завантаження даних файлу...</span>
+        </div>
+      `;
+      modal.classList.remove('hidden');
+
+      try {
+        const res = await fetch(`/api/preview/${filename}?limit=15`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Не вдалося прочитати CSV');
+        }
+        const data = await res.json();
+        const headers = data.headers || [];
+        const rows = data.rows || [];
+
+        countEl.textContent = `Показано перші ${data.total_previewed} рядків (${headers.length} колонок)`;
+
+        if (rows.length === 0) {
+          container.innerHTML = '<div class="py-8 text-center text-slate-400">Файл порожній.</div>';
+          return;
+        }
+
+        let tableHtml = `
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-800 text-slate-300 font-semibold sticky top-0 border-b border-slate-700">
+              <tr>
+                <th class="py-2.5 px-3 border-r border-slate-700/60 w-12 text-center text-slate-400">#</th>
+                ${headers.map(h => `<th class="py-2.5 px-3 border-r border-slate-700/60 whitespace-nowrap text-slate-200">${h}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 font-mono text-[11px]">
+        `;
+
+        rows.forEach((row, idx) => {
+          tableHtml += `
+            <tr class="hover:bg-slate-800/50 transition">
+              <td class="py-2 px-3 border-r border-slate-800/80 text-center text-slate-500 font-sans">${idx + 1}</td>
+              ${row.map(cell => {
+                const isUrl = typeof cell === 'string' && cell.startsWith('http');
+                const cellContent = isUrl
+                  ? `<a href="${cell}" target="_blank" class="text-blue-400 hover:underline max-w-[200px] truncate block" title="${cell}">${cell}</a>`
+                  : `<span class="truncate block max-w-[220px]" title="${cell || ''}">${cell || '<span class="text-slate-600">-</span>'}</span>`;
+                return `<td class="py-2 px-3 border-r border-slate-800/80 text-slate-300 whitespace-nowrap">${cellContent}</td>`;
+              }).join('')}
+            </tr>
+          `;
+        });
+
+        tableHtml += `</tbody></table>`;
+        container.innerHTML = tableHtml;
+      } catch (err) {
+        container.innerHTML = `<div class="py-8 text-center text-rose-400">Помилка завантаження попереднього перегляду: ${err.message}</div>`;
+        countEl.textContent = 'Помилка';
+      }
+    }
+
+    function closePreviewModal() {
+      const modal = document.getElementById('previewModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePreviewModal();
+    });
+
     // Initial load and periodic polling every 3s
     document.addEventListener('DOMContentLoaded', () => {
       updateStatus();
@@ -655,5 +814,51 @@
       pollInterval = setInterval(updateStatus, 3000);
     });
   </script>
+
+  <!-- Toast Notification Floating Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full"></div>
+
+  <!-- Quick CSV Preview Modal -->
+  <div id="previewModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden" onclick="if(event.target === this) closePreviewModal()">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90">
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <span>Швидкий перегляд:</span>
+              <span id="previewFilename" class="text-cyan-300 font-mono"></span>
+            </h3>
+            <p id="previewRowCount" class="text-xs text-slate-400 mt-0.5">Завантаження...</p>
+          </div>
+        </div>
+        <button onclick="closePreviewModal()"
+                class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Body (Table Scroll Container) -->
+      <div id="previewTableContainer" class="p-4 overflow-auto flex-1 bg-slate-950/50">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-between px-6 py-3 border-t border-slate-800 bg-slate-900/60 text-xs text-slate-400">
+        <span>* Відображаються перші 15 записів для попередньої оцінки нормалізації даних.</span>
+        <button onclick="closePreviewModal()"
+                class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition font-medium">
+          Закрити
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

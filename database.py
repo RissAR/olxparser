@@ -403,6 +403,7 @@ def get_scrape_session(session_id: int, db_path: Optional[str] = None) -> Option
 
 def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
     """Retrieves database summary metrics."""
+    init_db(db_path)
     conn = get_db_connection(db_path)
     res_count = conn.execute("SELECT COUNT(*) FROM residential_offers").fetchone()[0]
     comm_count = conn.execute("SELECT COUNT(*) FROM commercial_offers").fetchone()[0]

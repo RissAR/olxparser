@@ -166,11 +166,16 @@ def extract_total_area_value(offer: Dict[str, Any]) -> Optional[float]:
     return None
 
 
-def is_valid_rental_offer(offer: Dict[str, Any], category_type: str = "residential") -> bool:
+def is_valid_rental_offer(
+    offer: Dict[str, Any],
+    category_type: str = "residential",
+    target_district: Optional[str] = None
+) -> bool:
     """
     Filters offers according to requirements:
     1. Rejects seek / buy / sale listings (offer_type == 'seek', or seek/sale keywords).
     2. Rejects multilots without fixed price or fixed area.
+    3. Rejects promoted/sponsored ads injected from other districts into this slice.
     """
     # Check top-level offer type
     if offer.get("offer_type") == "seek":
@@ -201,6 +206,17 @@ def is_valid_rental_offer(offer: Dict[str, Any], category_type: str = "residenti
     # Check multilot range in title for commercial offers
     if category_type == "commercial" and RE_MULTILOT_RANGE.search(title):
         return False
+
+    # Filter out promoted top-ads from different districts injected into this slice
+    if target_district:
+        promotion = offer.get("promotion") or {}
+        is_promoted = bool(promotion.get("top_ad") or promotion.get("highlighted") or offer.get("is_promoted"))
+        if is_promoted:
+            loc = offer.get("location") or {}
+            dist_obj = loc.get("district") or {}
+            offer_district = dist_obj.get("name")
+            if offer_district and offer_district != target_district:
+                return False
 
     return True
 
@@ -727,16 +743,23 @@ class OLXScraper:
 
                     for raw_offer in offers:
                         try:
-                            # Apply validation & filtering
-                            if not is_valid_rental_offer(raw_offer, s.category_type):
+                            # Apply validation & filtering (including promo ad district guard)
+                            if not is_valid_rental_offer(raw_offer, s.category_type, target_district=s.district_name):
                                 continue
 
                             raw_json = json.dumps(raw_offer, ensure_ascii=False)
+                            promo = raw_offer.get("promotion") or {}
+                            is_promoted = bool(promo.get("top_ad") or promo.get("highlighted") or raw_offer.get("is_promoted"))
+
                             if s.category_type == "residential":
                                 norm_data = normalize_residential_offer(raw_offer)
+                                if is_promoted and s.district_name and norm_data.get("district") and norm_data.get("district") != s.district_name:
+                                    continue
                                 res_batch.append((norm_data, raw_json))
                             else:
                                 norm_data = normalize_commercial_offer(raw_offer)
+                                if is_promoted and s.district_name and norm_data.get("district") and norm_data.get("district") != s.district_name:
+                                    continue
                                 comm_batch.append((norm_data, raw_json))
 
                         except Exception as parse_err:

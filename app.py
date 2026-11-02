@@ -9,6 +9,7 @@ Built with:
 """
 
 import asyncio
+import csv
 import logging
 import os
 import re
@@ -326,6 +327,61 @@ async def download_file(filename: str):
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/api/preview/{filename}")
+async def preview_csv_file(filename: str, limit: int = 15):
+    """
+    GET /api/preview/{filename}?limit=15
+    Returns the headers and first N data rows of a generated CSV file for quick UI preview.
+    """
+    if not filename.endswith(".csv") or "/" in filename or "\\" in filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename specified.",
+        )
+
+    potential_paths = [
+        BASE_DIR / filename,
+        BASE_DIR / DEFAULT_EXPORTS_DIR / filename,
+        Path(DEFAULT_EXPORTS_DIR) / filename,
+    ]
+
+    target_file: Optional[Path] = None
+    for p in potential_paths:
+        if p.is_file():
+            target_file = p
+            break
+
+    if not target_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File '{filename}' not found.",
+        )
+
+    try:
+        rows: List[List[str]] = []
+        with open(target_file, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.reader(f)
+            headers = next(reader, [])
+            for i, row in enumerate(reader):
+                if i >= limit:
+                    break
+                rows.append(row)
+
+        return {
+            "status": "success",
+            "filename": filename,
+            "headers": headers,
+            "rows": rows,
+            "total_previewed": len(rows),
+        }
+    except Exception as exc:
+        logger.exception("Failed to preview file %s: %s", filename, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Preview failed: {str(exc)}",
+        )
 
 
 @app.post("/api/export")

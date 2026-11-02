@@ -518,6 +518,112 @@ class TestCommercialNormalizer(unittest.TestCase):
         self.assertEqual(CommercialNormalizer.extract_business_center_name("сучасний бізнес-центр\nГолосіївський район"), "")
 
 
+    def test_audit_cross_street_house_and_district_override(self):
+        """Tests for Bug 1 (Cross-street house isolation) and Bug 2 (District override)."""
+        parser = get_address_parser()
+
+        # Bug 1: House from different street in description MUST NOT attach to title street
+        title = "Оренда квартири, вул. Хрещатик"
+        desc = "Також є гарний варіант на вул. Ахматової Анни 14"
+        s, h, d = parser.parse(title, desc)
+        self.assertEqual(s, "вулиця Хрещатик")
+        self.assertEqual(h, "")  # 14 belongs to Akhmatova, NOT Khreshchatyk!
+        self.assertEqual(d, "Шевченківський")
+
+        # When description mentions the SAME street with house, it should be extracted
+        title2 = "Оренда квартири, вул. Саксаганського"
+        desc2 = "Київ, вул. Саксаганського 37К, новий ремонт"
+        s2, h2, d2 = parser.parse(title2, desc2)
+        self.assertEqual(s2, "вулиця Саксаганського")
+        self.assertEqual(h2, "37К")
+
+        # Bug 2: Contradictory district hint from poster dropdown must be overridden by canonical street district
+        title3 = "Оренда офісу, вул. Хрещатик 24"
+        s3, h3, d3 = parser.parse(title3, district_hint="Голосіївський")
+        self.assertEqual(s3, "вулиця Хрещатик")
+        self.assertEqual(h3, "24")
+        self.assertEqual(d3, "Шевченківський")  # Overridden from erroneous Голосіївський
+
+        # Multi-district street with valid matching hint should keep the hint
+        title4 = "Оренда на вул. Саксаганського 37"
+        s4, h4, d4 = parser.parse(title4, district_hint="Голосіївський")
+        self.assertEqual(s4, "вулиця Саксаганського")
+        self.assertEqual(d4, "Голосіївський")
+
+    def test_audit_person_streets_surname_indexing(self):
+        """Tests for Bug 3 (439 2-word person streets 1-gram surname recognition)."""
+        parser = get_address_parser()
+
+        # Person streets recognized by surname + indicator
+        s, h, d = parser.parse("Оренда 2к, вул. Ахматової 5")
+        self.assertEqual(s, "вулиця Ахматової Анни")
+        self.assertEqual(h, "5")
+        self.assertEqual(d, "Дарницький")
+
+        s, h, d = parser.parse("Оренда квартири, просп. Бажана 12")
+        self.assertEqual(s, "проспект Бажана Миколи")
+        self.assertEqual(h, "12")
+        self.assertEqual(d, "Дарницький")
+
+        s, h, _ = parser.parse("Оренда офісу, вул. Хмельницького 20")
+        self.assertEqual(s, "вулиця Хмельницького Богдана")
+        self.assertEqual(h, "20")
+
+        s, h, _ = parser.parse("Здам квартиру на вул. Франка 10")
+        self.assertEqual(s, "вулиця Франка Івана")
+        self.assertEqual(h, "10")
+
+        s, h, d = parser.parse("Оренда офісу, вул. Мазепи 3")
+        self.assertEqual(s, "вулиця Мазепи Івана")
+        self.assertEqual(h, "3")
+        self.assertEqual(d, "Печерський")
+
+        s, h, d = parser.parse("Оренда офісу, вул. Сагайдачного 15")
+        self.assertEqual(s, "вулиця Сагайдачного Петра")
+        self.assertEqual(h, "15")
+        self.assertEqual(d, "Подільський")
+
+        # Ambiguous word "бажана" without street indicator MUST NOT be treated as a street
+        s, h, _ = parser.parse("Чудова бажана квартира з ремонтом біля парку")
+        self.assertEqual(s, "")
+
+    def test_audit_business_center_hallucinations(self):
+        """Tests for Bug 4 (BC rejection of prepositions, metro, street indicators, and building class)."""
+        from normalizer import CommercialNormalizer
+
+        # Rejection of class indicators as BC name
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("Оренда офісу в БЦ Класу А на 5 поверсі"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ Класу B біля метро"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ Клас В"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name('Оренда в БЦ "Клас А"'), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name('БЦ "Class A"'), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name('БЦ "А"'), "")
+
+        # Rejection of capitalized prepositions and locations
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ Біля Метро Шулявська"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ В Районі Позняки"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ На Печерську"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ Метро Васильківська"), "")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ Вулиця Антоновича"), "")
+
+        # Legitimate BC names must be properly extracted
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("Оренда офісу в БЦ Gulliver, пл. Спортивна 1"), "Gulliver")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ «Парус» вул. Мечникова 2"), "Парус")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("Офіс у БЦ Toronto-Kyiv"), "Toronto-Kyiv")
+        self.assertEqual(CommercialNormalizer.extract_business_center_name("БЦ Поділ Плаза на Спаській"), "Поділ Плаза")
+
+    def test_audit_exporter_formatting(self):
+        """Tests for Bug 5 (Consistent string float formatting in exporter)."""
+        from exporter import format_csv_value
+
+        self.assertEqual(format_csv_value("42.0", "area_total"), "42")
+        self.assertEqual(format_csv_value("42.50", "area_total"), "42.5")
+        self.assertEqual(format_csv_value("3.0", "ceiling_height_m"), "3.0")
+        self.assertEqual(format_csv_value("14Б", "house"), "14Б")
+        self.assertEqual(format_csv_value("0", "commission_pct"), "0")
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

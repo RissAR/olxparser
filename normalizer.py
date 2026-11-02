@@ -138,6 +138,12 @@ STREET_SYNONYMS: Dict[str, str] = {
     "михайла максимовича": "вулиця Михайла Максимовича",
     "трутенка": "вулиця Михайла Максимовича",
     "онуфрія трутенка": "вулиця Михайла Максимовича",
+    "тадея рильського": "бульвар Тадея Рильського",
+    "бульвар тадея рильського": "бульвар Тадея Рильського",
+    "бул тадея рильського": "бульвар Тадея Рильського",
+    "бул. тадея рильського": "бульвар Тадея Рильського",
+    "рильського тадея": "бульвар Тадея Рильського",
+    "бульвар рильського": "бульвар Тадея Рильського",
     "рильського": "вулиця Рильського Максима",
     "максима рильського": "вулиця Рильського Максима",
     "богатирська": "вулиця Богатирська",
@@ -181,11 +187,19 @@ AMBIGUOUS_STREET_WORDS: Set[str] = {
     "тиха", "тихий", "тихе",
     "газова", "газовий",
     "відпочинку",
+    "бажана",
     "вокзальна", "деміївська", "голосіївська", "голосіївський", "олімпійська",
     "васильківська", "володимирський", "мальовничий", "мальовнича", "моторний", "моторна",
     "автономний", "автономна",
     "лугова", "садова", "лісова", "польова", "шкільна", "молодіжна", "квіткова", "сонячна",
-    "мирна", "спортивна", "промислова", "будівельників", "червона",
+    "мирна", "спортивна", "спортивний", "спортивне", "промислова", "будівельників", "червона",
+    "зимовий", "зимова", "зимове", "зимові",
+    "літній", "літня", "літнє",
+    "весняний", "весняна", "весняне",
+    "осінній", "осіння", "осіннє",
+    "дитяча", "дитячий", "дитяче",
+    "парковий", "паркова", "паркове",
+    "курортний", "курортна", "курортне",
 }
 
 # Regex for house number extraction immediately following street match or preposition
@@ -258,23 +272,32 @@ PREFIX_TYPE_PATTERNS: List[Tuple[re.Pattern, str]] = [
 ]
 
 SUFFIX_TYPE_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    (re.compile(r"^\s*(?:вул|вулиц[яіе]|ул|улиц[ае])\.?", re.IGNORECASE), "вулиця"),
-    (re.compile(r"^\s*(?:пров|провул(?:ок|ка|ку)|пер|переул(?:ок|ка|ку))\.?", re.IGNORECASE), "провулок"),
-    (re.compile(r"^\s*(?:просп|проспект[уі]?|пр-т)\.?", re.IGNORECASE), "проспект"),
-    (re.compile(r"^\s*(?:бульв|бульвар[уі]?|б-р)\.?", re.IGNORECASE), "бульвар"),
-    (re.compile(r"^\s*(?:площ[аі]|майдан|пл)\.?", re.IGNORECASE), "площа"),
-    (re.compile(r"^\s*(?:набережн[аея])\.?", re.IGNORECASE), "набережна"),
-    (re.compile(r"^\s*(?:узвіз|спуск)\.?", re.IGNORECASE), "узвіз"),
-    (re.compile(r"^\s*(?:шосе)\.?", re.IGNORECASE), "шосе"),
-    (re.compile(r"^\s*(?:але[яі])\.?", re.IGNORECASE), "алея"),
-    (re.compile(r"^\s*(?:тупик)\.?", re.IGNORECASE), "тупик"),
-    (re.compile(r"^\s*(?:проїзд)\.?", re.IGNORECASE), "проїзд"),
+    (re.compile(r"^\s*(?:вулиц[яіе]|улиц[ае]|вул\.?)\b", re.IGNORECASE), "вулиця"),
+    (re.compile(r"^\s*(?:провул(?:ок|ка|ку)|переул(?:ок|ка|ку)|пров\.?|пер\.?)\b", re.IGNORECASE), "провулок"),
+    (re.compile(r"^\s*(?:проспект[уі]?|просп\.?|пр-т\.?)\b", re.IGNORECASE), "проспект"),
+    (re.compile(r"^\s*(?:бульвар[уі]?|бульв\.?|б-р\.?)\b", re.IGNORECASE), "бульвар"),
+    (re.compile(r"^\s*(?:площ[аі]|майдан|пл\.?)\b", re.IGNORECASE), "площа"),
+    (re.compile(r"^\s*(?:набережн[аея])\b", re.IGNORECASE), "набережна"),
+    (re.compile(r"^\s*(?:узвіз|спуск)\b", re.IGNORECASE), "узвіз"),
+    (re.compile(r"^\s*(?:шосе)\b", re.IGNORECASE), "шосе"),
+    (re.compile(r"^\s*(?:але[яі])\b", re.IGNORECASE), "алея"),
+    (re.compile(r"^\s*(?:тупик)\b", re.IGNORECASE), "тупик"),
+    (re.compile(r"^\s*(?:проїзд)\b", re.IGNORECASE), "проїзд"),
 ]
 
-TITLES_SET: Set[str] = {
+TITLES_AND_FIRST_NAMES: Set[str] = {
     "академіка", "професора", "генерала", "маршала", "архітектора",
-    "адмірала", "композитора", "письменника", "гетьмана", "інженера", "полковника"
+    "адмірала", "композитора", "письменника", "гетьмана", "інженера", "полковника", "авіаконструктора",
+    "івана", "миколи", "василя", "михайла", "олександра", "петра", "володимира", "юрія",
+    "павла", "степана", "андрія", "григорія", "максима", "сергія", "бориса", "георгія",
+    "анатолія", "костянтина", "якова", "євгена", "віктора", "ярослава", "дмитра", "тараса",
+    "ігоря", "марка", "катерини", "марії", "раїси", "олексія", "федора", "ольги", "софії",
+    "лесі", "богдана", "анни", "олени", "вадима", "романа", "вікентія", "чеслава", "леоніда",
+    "всеволода", "наталії", "в’ячеслава", "в'ячеслава", "антоніни", "людмили", "філіппа",
+    "семена", "демида", "артема", "данила", "назарія", "зої", "лаври", "валі", "тимофія",
+    "кузьми", "платона", "луки", "іллі", "кирила", "гліба", "дем'яна", "дем’яна"
 }
+TITLES_SET: Set[str] = TITLES_AND_FIRST_NAMES
 
 TYPE_PRIORITY: Dict[str, int] = {
     "вулиця": 10,
@@ -352,11 +375,11 @@ class KyivAddressParser:
                             self.search_index[f"пров {p1} {p2}"] = canonical
                             self.search_index[f"пров {p2} {p1}"] = canonical
 
-                    # Title streets: generate 1-gram surname index for 88 title streets
+                    # Person streets: generate 1-gram surname index for 2-word streets with titles/first names
                     surname = None
-                    if p1 in TITLES_SET:
+                    if p1 in TITLES_AND_FIRST_NAMES and p2 not in TITLES_AND_FIRST_NAMES:
                         surname = p2
-                    elif p2 in TITLES_SET:
+                    elif p2 in TITLES_AND_FIRST_NAMES and p1 not in TITLES_AND_FIRST_NAMES:
                         surname = p1
                     if surname and len(surname) >= 4:
                         if st_type:
@@ -401,6 +424,7 @@ class KyivAddressParser:
         # Fix missing district for known streets
         dist_fixes = {
             "вулиця Михайла Максимовича": ["Голосіївський"],
+            "бульвар Тадея Рильського": ["Голосіївський"],
             "вулиця Джона Маккейна": ["Печерський"],
             "вулиця Іоанна Павла II": ["Печерський"],
             "вулиця Всеволода Змієнка": ["Подільський"],
@@ -410,6 +434,40 @@ class KyivAddressParser:
         for st_name, dsts in dist_fixes.items():
             if st_name not in self.canonical_to_districts or not self.canonical_to_districts[st_name]:
                 self.canonical_to_districts[st_name] = dsts
+
+        # Generate Russian feminine/masculine/mixed adjective variants
+        # (e.g. ракетная -> ракетна, жилянская -> жилянська, лобановского -> лобановського)
+        ru_synonyms = {}
+        for k, canon in list(self.search_index.items()):
+            words = k.split()
+            if not words:
+                continue
+            last = words[-1]
+            ru_last = None
+            if last.endswith("ська"):
+                ru_last = last[:-4] + "ская"
+            elif last.endswith("цька"):
+                ru_last = last[:-4] + "цкая"
+            elif last.endswith("на") and len(last) > 3:
+                ru_last = last[:-2] + "ная"
+            elif last.endswith("ва") and len(last) > 3:
+                ru_last = last[:-2] + "вая"
+            elif last.endswith("та") and len(last) > 3:
+                ru_last = last[:-2] + "тая"
+            elif last.endswith("ра") and len(last) > 3:
+                ru_last = last[:-2] + "рая"
+            elif last.endswith("ського"):
+                ru_last = last[:-6] + "ского"
+
+            if ru_last:
+                ru_key = " ".join(words[:-1] + [ru_last])
+                if ru_key not in self.search_index:
+                    ru_synonyms[ru_key] = canon
+                    st_type = canon.split()[0].lower() if canon else ""
+                    if st_type:
+                        self.typed_streets[(ru_key, st_type)] = canon
+
+        self.search_index.update(ru_synonyms)
 
     def extract_street_and_house(self, text: str) -> Tuple[str, str]:
         """
@@ -422,7 +480,14 @@ class KyivAddressParser:
             return "", ""
 
         clean_text = strip_html(text)
-        token_matches = list(re.finditer(r"[\w\-]+", clean_text.lower()))
+        # Separate glued prefixes like ул.Ракетная or вул.Жилянська or м.Демеевская
+        clean_text = re.sub(
+            r"\b(вул|ул|просп|пр-т|бул|б-р|пров|пер|м|ст\.?\s*м)\.([а-яА-ЯіІїЇєЄґҐ])",
+            r"\1. \2",
+            clean_text,
+            flags=re.IGNORECASE,
+        )
+        token_matches = list(re.finditer(r"\b[\w]+(?:-[\w]+)*\b", clean_text.lower()))
         num_tokens = len(token_matches)
         if num_tokens == 0:
             return "", ""
@@ -433,6 +498,8 @@ class KyivAddressParser:
         for length in (4, 3, 2, 1):
             for i in range(num_tokens - length + 1):
                 phrase = " ".join(t.group() for t in token_matches[i : i + length]).strip(".- ")
+                phrase_words = phrase.split()
+                real_length = len(phrase_words)
                 if len(phrase) < 4 or phrase not in self.search_index:
                     continue
 
@@ -472,11 +539,12 @@ class KyivAddressParser:
                     prefix_ctx
                 ))
                 has_suffix_ind = bool(re.search(
-                    r"^\s*(?:вул|вулиц[яіе]|ул|улиц[ае]|просп|проспект[уі]?|пр-т|бульв|бульвар[уі]?|б-р|пров|провул(?:ок|ка|ку)|пер|переул(?:ок|ка|ку)|узвіз|спуск|набережн[аея]|шосе|але[яі]|площ[аі]|майдан|тупик)\.?",
-                    suffix_ctx
+                    r"^\s*(?:вулиц[яіе]|улиц[ае]|проспект[уі]?|бульвар[уі]?|провул(?:ок|ка|ку)|переул(?:ок|ка|ку)|узвіз|спуск|набережн[аея]|шосе|але[яі]|площ[аі]|майдан|тупик|\b(?:вул|ул|просп|пр-т|бульв|б-р|пров|пер)\.?)(?:\s+|[.,;!?]|$)",
+                    suffix_ctx,
+                    re.IGNORECASE,
                 ))
 
-                has_loc_prep = bool(re.search(r"\b(?:на|по)\s*$", prefix_ctx))
+                has_loc_prep = bool(re.search(r"\b(?:на|по|за\s+адресою|адреса|по\s+адресу|адрес)\s*[:\-–—]?\s*$", prefix_ctx))
 
                 phrase_has_indicator = any(
                     w in ("вулиця", "вул", "проспект", "просп", "шосе", "бульвар", "бульв", "провулок", "пров", "узвіз", "набережна", "площа", "майдан", "тракт", "тупик", "алея")
@@ -487,8 +555,8 @@ class KyivAddressParser:
                 tail = clean_text[end_char:]
                 house = self._extract_house_from_tail(tail)
 
-                # 5. Single-word matches (length == 1) MUST have an explicit street indicator, house number, or location preposition
-                if length == 1:
+                # 5. Single-word matches (real_length == 1) MUST have an explicit street indicator or house number
+                if real_length == 1:
                     if phrase in AMBIGUOUS_STREET_WORDS:
                         if not (phrase_has_indicator or has_prefix_ind or has_suffix_ind):
                             continue
@@ -512,6 +580,12 @@ class KyivAddressParser:
                 else:
                     canonical = self.search_index[phrase]
 
+                # Disambiguate ЖК Respublika: all buildings are on бульвар Тадея Рильського
+                if canonical == "вулиця Рильського Максима":
+                    lower_all = (clean_text + " " + text).lower()
+                    if "республік" in lower_all or "respublika" in lower_all or "таде" in lower_all:
+                        canonical = "бульвар Тадея Рильського"
+
                 # Calculate confidence score
                 score = 0
                 if phrase_has_indicator or has_prefix_ind or has_suffix_ind:
@@ -520,13 +594,13 @@ class KyivAddressParser:
                     score += 60
                 if house:
                     score += 50
-                if length >= 2:
-                    score += 50 * length
+                if real_length >= 2:
+                    score += 50 * real_length
 
                 if score <= 0:
                     continue
 
-                candidates.append((score, -start_char, length, canonical, house))
+                candidates.append((score, -start_char, real_length, canonical, house))
 
         if not candidates:
             return "", ""
@@ -568,24 +642,24 @@ class KyivAddressParser:
         street, house = self.extract_street_and_house(title)
 
         if street and not house and description:
-            # Look for house in description
+            # Look for house in description only if it belongs to the same street
             desc_street, desc_house = self.extract_street_and_house(description)
-            if desc_house:
+            if desc_house and desc_street == street:
                 house = desc_house
-                if not street and desc_street:
-                    street = desc_street
 
         if not street and description:
             street, house = self.extract_street_and_house(description)
 
         # Resolve district
         district = ""
-        if district_hint and district_hint in KYIV_DISTRICTS:
+        if street and street in self.canonical_to_districts and self.canonical_to_districts[street]:
+            valid_districts = self.canonical_to_districts[street]
+            if district_hint and district_hint in valid_districts:
+                district = district_hint
+            else:
+                district = valid_districts[0]
+        elif district_hint and district_hint in KYIV_DISTRICTS:
             district = district_hint
-        elif street and street in self.canonical_to_districts:
-            districts = self.canonical_to_districts[street]
-            if districts:
-                district = districts[0]
 
         return street, house, district
 
@@ -968,31 +1042,43 @@ class ResidentialNormalizer(BaseNormalizer):
     def extract_generator(offer: Dict[str, Any], text: str) -> str:
         """Finds if generator is available in building: yes / no / ''."""
         t_lower = text.lower()
+        # Check explicit negation first
+        if re.search(r"\b(?:без\s+генератора?|генератора?\s+немає|генератор\s+відсутній|генератора?\s+нет)\b", t_lower):
+            return "no"
         if re.search(
-            r"\b(?:генератор\s+на\s+будинок|будинковий\s+генератор|генератор\s+на\s+ліфт|ліфт\s+працює\s+від\s+генератора|є\s+генератор|підключено\s+генератор|генератор\s+на\s+опалення|генератор\s+на\s+воду|резервне\s+живлення\s+будинку)\b",
+            r"\b(?:генератор\w*\s+на\s+будинок|будинковий\s+генератор\w*|генератор\w*\s+на\s+ліфт|ліфт\s+працює\s+від\s+генератора|є\s+генератор\w*|підключено\s+генератор\w*|з\s+генератор\w*|генератор\w*\s+на\s+опалення|генератор\w*\s+на\s+воду|резервне\s+живлення\s+будинку)\b",
             t_lower,
         ):
             return "yes"
-        if re.search(r"\b(?:без\s+генератора|генератора\s+немає|генератор\s+відсутній)\b", t_lower):
-            return "no"
         return ""
 
     @staticmethod
     def extract_inverter(text: str) -> str:
         """Finds if inverter / EcoFlow / battery station is in the flat: yes / no / ''."""
         t_lower = text.lower()
+        # Check explicit negation first
+        if re.search(r"\b(?:без\s+інвертор\w*|без\s+инвертор\w*|інвертора?\s+немає|инвертора?\s+нет|без\s+ecoflow|без\s+зарядної\s+станції)\b", t_lower):
+            return "no"
         if re.search(
             r"\b(?:інвертор|інвектор|инвертор|ecoflow|екофлоу|bluetti|блюетті|дбж|ups|акумулятор\s+(?:у|в)\s+квартирі|зарядна\s+станція|резервне\s+живлення\s+(?:в|у)\s+квартирі)\b",
             t_lower,
         ):
+            if re.search(r"\bбез\s+(?:будь-яких\s+)?(?:інвертор\w*|инвертор\w*)", t_lower):
+                return "no"
             return "yes"
-        if re.search(r"\b(?:без\s+інвертора|інвертора\s+немає)\b", t_lower):
-            return "no"
         return ""
 
     @staticmethod
     def extract_pets(offer: Dict[str, Any], text: str) -> str:
         """Determines if pets are allowed: yes / no / ''."""
+        # Check explicit positive statement in title or URL first
+        # (landlords frequently state 'mozhna z tvarinoyu' in title while mistakenly ticking 'no' in OLX parameters)
+        title_lower = offer.get("title", "").lower()
+        url = offer.get("url", "").lower()
+        if re.search(r"\b(?:можна\s+з\s+(?:маленькою\s+)?тварин\w*|дозволено\s+з\s+тварин\w*|pet\s*[-]?friendly)\b", title_lower) or "mozhna-z-tvarin" in url or "z-malenkoyu-tvarinoyu" in url:
+            if "bez-tvarin" not in url and not re.search(r"\bбез\s+тварин\w*\b", title_lower):
+                return "yes"
+
         params = offer.get("params", [])
         for p in params:
             if p.get("key") == "pets":
@@ -1013,7 +1099,6 @@ class ResidentialNormalizer(BaseNormalizer):
                     if k == "no":
                         return "no"
 
-        url = offer.get("url", "").lower()
         if "tvarin" in url or "pet" in url:
             if "bez-tvarin" in url:
                 return "no"
@@ -1283,12 +1368,33 @@ class CommercialNormalizer(BaseNormalizer):
             "власник", "собственник", "без", "комісії", "комиссии"
         }
 
+        disallowed_starters = {
+            "біля", "на", "в", "у", "з", "по", "від", "до", "для", "під", "над", "при",
+            "метро", "ст", "станція", "станції", "м",
+            "вулиця", "вул", "просп", "проспект", "бульв", "бульвар", "пров", "провулок",
+            "площа", "шосе", "узвіз", "тупик", "алея",
+            "клас", "класу", "class",
+            "район", "р-н", "поверх", "поверсі",
+            "оренда", "аренда", "офіс", "офис", "приміщення",
+            "новий", "сучасний"
+        }
+
+        def _is_valid_bc_name(name_str: str) -> bool:
+            tokens = [t.lower() for t in re.findall(r"\w+", name_str) if not t.isdigit()]
+            if not tokens:
+                return False
+            if tokens[0] in disallowed_starters:
+                return False
+            non_generic = [t for t in tokens if t not in generic_words and len(t) >= 2]
+            if not non_generic:
+                return False
+            return True
+
         # 1. Quoted name after BC indicator (most accurate)
         m_q = re.search(r'(?:БЦ|бізнес[- ]центр[аіе]?|бизнес[- ]центр[ае]?|ТОЦ|ТРЦ)\s*["«„]([A-Za-zА-Яа-яІіЇїЄє0-9\s\.\-_]{2,40}?)["»“]', text)
         if m_q:
             bc = m_q.group(1).strip()
-            tokens = [t.lower() for t in re.findall(r"\w+", bc)]
-            if bc and not bc.isdigit() and tokens and not all(t in generic_words for t in tokens):
+            if bc and not bc.isdigit() and _is_valid_bc_name(bc):
                 return bc
 
         # 2. Unquoted proper noun on the same line (no newlines) starting with capital letter
@@ -1298,10 +1404,8 @@ class CommercialNormalizer(BaseNormalizer):
             bc = re.sub(r"[,\.;:]+$", "", bc).strip()
             tail_ctx = text[m_u.end():min(len(text), m_u.end() + 20)].lower()
             if not re.match(r"^\s*(?:район[уі]?|р-н[уі]?|метро)", tail_ctx):
-                tokens = [t.lower() for t in re.findall(r"\w+", bc) if not t.isdigit()]
-                if tokens and any(t not in generic_words for t in tokens):
-                    if 2 <= len(bc) <= 40 and not bc.isdigit():
-                        return bc
+                if 2 <= len(bc) <= 40 and not bc.isdigit() and _is_valid_bc_name(bc):
+                    return bc
 
         return ""
 
