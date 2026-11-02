@@ -303,6 +303,7 @@ async def download_file(filename: str):
     potential_paths = [
         BASE_DIR / filename,
         BASE_DIR / DEFAULT_EXPORTS_DIR / filename,
+        Path(DEFAULT_EXPORTS_DIR) / filename,
     ]
 
     target_file: Optional[Path] = None

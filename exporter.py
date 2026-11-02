@@ -27,7 +27,7 @@ from database import (
 
 DEFAULT_RESIDENTIAL_FILENAME = "olx_residential_kyiv.csv"
 DEFAULT_COMMERCIAL_FILENAME = "olx_commercial_kyiv.csv"
-DEFAULT_EXPORTS_DIR = "exports"
+DEFAULT_EXPORTS_DIR = os.getenv("OLX_EXPORTS_DIR", "exports")
 
 # Set of columns where integer values are strictly expected when whole
 INTEGER_LIKE_COLUMNS = {
@@ -173,7 +173,13 @@ def export_residential(
     Exports all residential offers to a CSV file with strictly 23 columns
     matching olx-manual-template.csv with utf-8-sig encoding.
     """
-    target = Path(output_path or DEFAULT_RESIDENTIAL_FILENAME)
+    if output_path:
+        target = Path(output_path)
+    elif os.getenv("OLX_EXPORTS_DIR"):
+        target = Path(os.environ["OLX_EXPORTS_DIR"]) / DEFAULT_RESIDENTIAL_FILENAME
+    else:
+        target = Path(DEFAULT_RESIDENTIAL_FILENAME)
+
     if target.parent and not target.parent.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
 
@@ -200,7 +206,13 @@ def export_commercial(
     Exports all commercial offers to a CSV file with strictly 35 columns
     matching olx-commercial-template.csv with utf-8-sig encoding.
     """
-    target = Path(output_path or DEFAULT_COMMERCIAL_FILENAME)
+    if output_path:
+        target = Path(output_path)
+    elif os.getenv("OLX_EXPORTS_DIR"):
+        target = Path(os.environ["OLX_EXPORTS_DIR"]) / DEFAULT_COMMERCIAL_FILENAME
+    else:
+        target = Path(DEFAULT_COMMERCIAL_FILENAME)
+
     if target.parent and not target.parent.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
 
@@ -228,8 +240,9 @@ def export_all(
     If output_dir is given, files are placed in that directory.
     Otherwise, written to the current working directory.
     """
-    if output_dir:
-        out = Path(output_dir)
+    effective_dir = output_dir or os.getenv("OLX_EXPORTS_DIR")
+    if effective_dir:
+        out = Path(effective_dir)
         res_target = out / DEFAULT_RESIDENTIAL_FILENAME
         comm_target = out / DEFAULT_COMMERCIAL_FILENAME
     else:

@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Python environment & cache
+.venv
+venv
+env
+ENV
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & CI
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor & System
+.agent/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Persistent databases and local data exports
+*.db
+*.sqlite
+*.sqlite3
+data/
+output/
+exports/
+olx_residential_kyiv.csv
+olx_commercial_kyiv.csv
+
+# Temporary and design docs
+scratch/
+*.docx

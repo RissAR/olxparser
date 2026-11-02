@@ -1,0 +1,26 @@
+services:
+  olxparser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: olxparser:latest
+    container_name: olxparser
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=Europe/Kyiv
+      - OLX_DB_PATH=/app/data/olx_storage.db
+      - OLX_EXPORTS_DIR=/app/exports
+    volumes:
+      # Persistent storage for SQLite database (deduplication & session state)
+      - ./data:/app/data
+      # Persistent directory for generated UTF-8 BOM CSV exports
+      - ./exports:/app/exports
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

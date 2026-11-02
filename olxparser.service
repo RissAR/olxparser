@@ -1,0 +1,33 @@
+[Unit]
+Description=OLX Kyiv Real Estate Parser & Web UI Service
+After=network.target
+
+[Service]
+Type=simple
+# User and Group can be customized according to your VDS user setup (e.g. ubuntu, root, olxuser)
+# User=ubuntu
+# Group=ubuntu
+
+WorkingDirectory=/opt/olxparser
+ExecStart=/opt/olxparser/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000
+
+# Environment configurations
+Environment="PYTHONUNBUFFERED=1"
+Environment="TZ=Europe/Kyiv"
+Environment="OLX_DB_PATH=/opt/olxparser/data/olx_storage.db"
+Environment="OLX_EXPORTS_DIR=/opt/olxparser/exports"
+Environment="PATH=/opt/olxparser/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+
+# Service lifecycle and auto-recovery
+Restart=always
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=30s
+
+# Logging output to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=olxparser
+
+[Install]
+WantedBy=multi-user.target

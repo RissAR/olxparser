@@ -5,6 +5,7 @@ for residential offers, commercial offers, and scrape sessions.
 """
 
 import os
+from pathlib import Path
 import sqlite3
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -79,6 +80,9 @@ COMMERCIAL_COLUMNS = [
 def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     """Creates a database connection with row factory enabled."""
     path = db_path or DEFAULT_DB_PATH
+    db_file = Path(path)
+    if db_file.parent and not db_file.parent.exists():
+        db_file.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
