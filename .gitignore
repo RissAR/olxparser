@@ -29,10 +29,11 @@ wheels/
 *.sqlite
 *.sqlite3
 
-# Exports
-data/
+# Exports & Runtime Data
+/data/
 output/
 exports/
+!tests/data/
 olx_residential_kyiv.csv
 olx_commercial_kyiv.csv
 

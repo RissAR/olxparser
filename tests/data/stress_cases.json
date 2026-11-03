@@ -1,0 +1,223 @@
+[
+  {
+    "id": "stress_inv_neg_1",
+    "type": "residential_inverter",
+    "input": {
+      "title": "Від власника (без інвертор) оренда 1к кв 40.9 кв.м",
+      "description": "Квартира в гарному стані, без інвертора"
+    },
+    "expected": { "inverter": "no" },
+    "description": "Negation 'без інвертор' must yield 'no', not 'yes'"
+  },
+  {
+    "id": "stress_inv_pos_1",
+    "type": "residential_inverter",
+    "input": {
+      "title": "Оренда з інвертором та EcoFlow 1к квартири",
+      "description": "Встановлено якісний інвертор на 3кВт"
+    },
+    "expected": { "inverter": "yes" },
+    "description": "Positive inverter presence"
+  },
+  {
+    "id": "stress_gen_neg_1",
+    "type": "residential_generator",
+    "input": {
+      "title": "Оренда 2к квартири на Печерську",
+      "description": "Оренда квартири, на жаль будинок без генератора в будинку"
+    },
+    "expected": { "generator": "no" },
+    "description": "Negation 'без генератора' must yield 'no'"
+  },
+  {
+    "id": "stress_gen_neg_2",
+    "type": "residential_generator",
+    "input": {
+      "title": "Оренда 1к Голосієво",
+      "description": "Генератор відсутній, опалення центральне"
+    },
+    "expected": { "generator": "no" },
+    "description": "Negation 'генератор відсутній' must yield 'no'"
+  },
+  {
+    "id": "stress_gen_pos_1",
+    "type": "residential_generator",
+    "input": {
+      "title": "Оренда 2к квартири, є резервне живлення",
+      "description": "Будинок з генератором на ліфт та опалення, світло не вимикають"
+    },
+    "expected": { "generator": "yes" },
+    "description": "Positive generator presence"
+  },
+  {
+    "id": "stress_pets_neg_1",
+    "type": "residential_pets",
+    "input": {
+      "title": "Здам 1к квартиру для 1 особи, строго без тварин",
+      "params": []
+    },
+    "expected": { "pets": "no" },
+    "description": "Negation 'без тварин' in title must yield 'no'"
+  },
+  {
+    "id": "stress_pets_pos_conflict",
+    "type": "residential_pets",
+    "input": {
+      "title": "Укриття перша здача 1-кімнатна квартира тераса можна з маленькою твариною",
+      "params": [{"key": "pets", "value": {"key": ["no"]}}]
+    },
+    "expected": { "pets": "yes" },
+    "description": "Title permission 'можна з маленькою твариною' overrides checkbox 'no'"
+  },
+  {
+    "id": "stress_street_winter",
+    "type": "address",
+    "input": {
+      "text": "Встигніть орендувати автономну квартиру в центрі на зимовий період!!! За адресою: Горького, 109. ЖК Володимирський."
+    },
+    "expected": {
+      "street": "вулиця Антоновича",
+      "house": "109",
+      "district": "Голосіївський"
+    },
+    "description": "'на зимовий період' must NOT match 'провулок Зимовий'"
+  },
+  {
+    "id": "stress_street_sport",
+    "type": "address",
+    "input": {
+      "text": "У ЖК Нова Англія є: - спортивна територія та прогулянки"
+    },
+    "expected": {
+      "street": "",
+      "house": ""
+    },
+    "description": "'спортивна територія' must NOT match 'площа Спортивна'"
+  },
+  {
+    "id": "stress_street_school",
+    "type": "address",
+    "input": {
+      "text": "Поруч школа, дитячий садок та паркова зона відпочинку. Деміївка."
+    },
+    "expected": {
+      "street": "",
+      "house": ""
+    },
+    "description": "General words 'школа', 'паркова зона' must not match streets without indicators"
+  },
+  {
+    "id": "stress_street_respublika",
+    "type": "address",
+    "input": {
+      "text": "Оренда 1к квартири в ЖК Respublika на бул. Тадея Рильського 4"
+    },
+    "expected": {
+      "street": "бульвар Тадея Рильського",
+      "house": "4",
+      "district": "Голосіївський"
+    },
+    "description": "Boulevard Tadeya Rylskoho in ЖК Respublika"
+  },
+  {
+    "id": "stress_street_ru_ending",
+    "type": "address",
+    "input": {
+      "text": "Сдам 1к квартиру м.Демеевская по ул.Ракетная, 24"
+    },
+    "expected": {
+      "street": "вулиця Ракетна",
+      "house": "24",
+      "district": "Голосіївський"
+    },
+    "description": "Russian declension 'ул.Ракетная, 24' normalized to 'вулиця Ракетна'"
+  },
+  {
+    "id": "stress_street_park_rejection",
+    "type": "address",
+    "input": {
+      "text": "Поряд парки: ВДНГ; Максима Рильського; Феофанія. Поруч ТРЦ Республіка. Вул. Васильківська 45"
+    },
+    "expected": {
+      "street": "вулиця Васильківська",
+      "house": "45"
+    },
+    "description": "Park name 'Максима Рильського' rejected; real street 'вулиця Васильківська 45' extracted"
+  },
+  {
+    "id": "stress_bc_cleanup_1",
+    "type": "commercial_bc",
+    "input": {
+      "title": "Оренда офісу в БЦ Кадор Жилянская 68"
+    },
+    "expected": { "business_center_name": "Кадор" },
+    "description": "Trailing street and house stripped from BC name"
+  },
+  {
+    "id": "stress_bc_cleanup_2",
+    "type": "commercial_bc",
+    "input": {
+      "title": "Оренда офісу в БЦ Малевича 86б"
+    },
+    "expected": { "business_center_name": "" },
+    "description": "Address used as BC name is completely cleared"
+  },
+  {
+    "id": "stress_renov_whitebox_1",
+    "type": "residential_renovation",
+    "input": {
+      "description": "Квартира після будівельників, під чистове оздоблення"
+    },
+    "expected": { "renovation": "white_box" },
+    "description": "'під чистове оздоблення' maps to 'white_box'"
+  },
+  {
+    "id": "stress_renov_whitebox_2",
+    "type": "residential_renovation",
+    "input": {
+      "description": "Стан - white box, готова до фінішного ремонту"
+    },
+    "expected": { "renovation": "white_box" },
+    "description": "'white box' maps to 'white_box'"
+  },
+  {
+    "id": "stress_multilot_range_reject",
+    "type": "multilot",
+    "input": {
+      "title": "Оренда офісу 30-200 м2 в центрі",
+      "category": "commercial"
+    },
+    "expected": { "valid_offer": false },
+    "description": "Range area 30-200 m2 rejected as multilot"
+  },
+  {
+    "id": "stress_single_lot_accept",
+    "type": "multilot",
+    "input": {
+      "title": "Оренда окремого кабінету 45 м2",
+      "category": "commercial"
+    },
+    "expected": { "valid_offer": true },
+    "description": "Single area lot 45 m2 accepted"
+  },
+  {
+    "id": "stress_cross_district_promo_reject",
+    "type": "promo_district",
+    "input": {
+      "offer": {
+        "title": "Затишна невелика квартира в оренду Богатирська вул",
+        "offer_type": "rent",
+        "location": { "district": { "name": "Оболонський" } },
+        "promotion": { "top_ad": true, "highlighted": true },
+        "params": [
+          { "key": "price", "value": 11500 },
+          { "key": "total_area", "value": 23 }
+        ]
+      },
+      "category": "residential",
+      "target_district": "Голосіївський"
+    },
+    "expected": { "valid_offer": false },
+    "description": "Promoted ad from Оболонський district injected into Голосіївський search is rejected"
+  }
+]
