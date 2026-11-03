@@ -429,6 +429,17 @@
       }
     });
 
+    // HTML Escaping Helper for XSS Protection
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     // Toast Notification System
     function showToast(message, type = 'success') {
       const container = document.getElementById('toastContainer');
@@ -443,7 +454,7 @@
       const icon = isSuccess
         ? `<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`
         : `<svg class="w-4 h-4 text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>`;
-      toast.innerHTML = `${icon}<span>${message}</span>`;
+      toast.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
       container.appendChild(toast);
       requestAnimationFrame(() => {
         toast.classList.remove('translate-y-[-10px]', 'opacity-0');
@@ -502,7 +513,15 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          showToast('Помилка: ' + (data.message || data.detail || 'Не вдалося запустити'), 'error');
+          let errMsg = 'Не вдалося запустити';
+          if (typeof data.detail === 'string') {
+            errMsg = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            errMsg = data.detail.map(d => d.msg || JSON.stringify(d)).join(', ');
+          } else if (data.message) {
+            errMsg = data.message;
+          }
+          showToast('Помилка: ' + errMsg, 'error');
           return;
         }
         showToast('Парсинг успішно запущено!', 'success');
@@ -603,8 +622,10 @@
 
         // Session timer
         if (data.started_at) {
-          const startTime = new Date(data.started_at).getTime();
-          const endTime = (isRunning || !data.finished_at) ? Date.now() : new Date(data.finished_at).getTime();
+          const startStr = typeof data.started_at === 'string' ? data.started_at.replace('T', ' ') : data.started_at;
+          const startTime = new Date(startStr).getTime();
+          const finStr = typeof data.finished_at === 'string' ? data.finished_at.replace('T', ' ') : data.finished_at;
+          const endTime = (isRunning || !data.finished_at) ? Date.now() : new Date(finStr).getTime();
           const diffSec = Math.max(0, Math.floor((endTime - startTime) / 1000));
           const hh = String(Math.floor(diffSec / 3600)).padStart(2, '0');
           const mm = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
@@ -694,10 +715,10 @@
                 <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                <span>${f.filename}</span>
+                <span>${escapeHtml(f.filename)}</span>
               </td>
               <td class="py-3 px-4">${tplBadge}</td>
-              <td class="py-3 px-4 text-slate-300">${f.size_formatted}</td>
+              <td class="py-3 px-4 text-slate-300">${escapeHtml(f.size_formatted || '')}</td>
               <td class="py-3 px-4 text-emerald-400 font-semibold">${(f.rows_count || 0).toLocaleString('uk-UA')}</td>
               <td class="py-3 px-4 text-slate-400 text-[11px]">${f.modified_at || '-'}</td>
               <td class="py-3 px-4 text-right">
@@ -769,7 +790,7 @@
             <thead class="bg-slate-800 text-slate-300 font-semibold sticky top-0 border-b border-slate-700">
               <tr>
                 <th class="py-2.5 px-3 border-r border-slate-700/60 w-12 text-center text-slate-400">#</th>
-                ${headers.map(h => `<th class="py-2.5 px-3 border-r border-slate-700/60 whitespace-nowrap text-slate-200">${h}</th>`).join('')}
+                ${headers.map(h => `<th class="py-2.5 px-3 border-r border-slate-700/60 whitespace-nowrap text-slate-200">${escapeHtml(String(h))}</th>`).join('')}
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/60 font-mono text-[11px]">
@@ -780,10 +801,12 @@
             <tr class="hover:bg-slate-800/50 transition">
               <td class="py-2 px-3 border-r border-slate-800/80 text-center text-slate-500 font-sans">${idx + 1}</td>
               ${row.map(cell => {
-                const isUrl = typeof cell === 'string' && cell.startsWith('http');
+                const cellStr = cell !== null && cell !== undefined ? String(cell) : '';
+                const isUrl = cellStr.startsWith('http://') || cellStr.startsWith('https://');
+                const escaped = escapeHtml(cellStr);
                 const cellContent = isUrl
-                  ? `<a href="${cell}" target="_blank" class="text-blue-400 hover:underline max-w-[200px] truncate block" title="${cell}">${cell}</a>`
-                  : `<span class="truncate block max-w-[220px]" title="${cell || ''}">${cell || '<span class="text-slate-600">-</span>'}</span>`;
+                  ? `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline max-w-[200px] truncate block" title="${escaped}">${escaped}</a>`
+                  : `<span class="truncate block max-w-[220px]" title="${escaped}">${escaped || '<span class="text-slate-600">-</span>'}</span>`;
                 return `<td class="py-2 px-3 border-r border-slate-800/80 text-slate-300 whitespace-nowrap">${cellContent}</td>`;
               }).join('')}
             </tr>
@@ -793,7 +816,7 @@
         tableHtml += `</tbody></table>`;
         container.innerHTML = tableHtml;
       } catch (err) {
-        container.innerHTML = `<div class="py-8 text-center text-rose-400">Помилка завантаження попереднього перегляду: ${err.message}</div>`;
+        container.innerHTML = `<div class="py-8 text-center text-rose-400">Помилка завантаження попереднього перегляду: ${escapeHtml(err.message)}</div>`;
         countEl.textContent = 'Помилка';
       }
     }

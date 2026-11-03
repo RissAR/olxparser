@@ -125,6 +125,58 @@ class TestStage1Fixes(unittest.TestCase):
 
         asyncio.run(_run())
 
+    def test_id11prtc_park_false_positive_rejection(self):
+        # In ID11prTc, text mentions "парки: ВДНГ; Максима Рильського" and "ТРЦ Республіка"
+        # Must NOT match "бульвар Тадея Рильського"
+        text = "Поряд парки: ВДНГ; Максима Рильського; Феофанія. Поруч ТРЦ Республіка. Вул. Васильківська 45"
+        street, house, district = self.parser.parse(text)
+        self.assertNotEqual(street, "бульвар Тадея Рильського")
+        self.assertEqual(street, "вулиця Васильківська")
+        self.assertEqual(house, "45")
+
+    def test_bc_clean_trailing_street_and_house(self):
+        from normalizer import CommercialNormalizer
+        # Should strip address/house suffix from BC name
+        bc1 = CommercialNormalizer.extract_business_center_name("Оренда офісу в БЦ Кадор Жилянская 68")
+        self.assertEqual(bc1, "Кадор")
+
+        # If the string was purely an address, BC should be empty
+        bc2 = CommercialNormalizer.extract_business_center_name("Оренда офісу в БЦ Малевича 86б")
+        self.assertEqual(bc2, "")
+
+    def test_white_box_renovation(self):
+        # Key "6" -> "white_box"
+        offer_key = {"params": [{"key": "repair", "value": "6"}]}
+        res_key = ResidentialNormalizer.extract_renovation(offer_key, "")
+        self.assertEqual(res_key, "white_box")
+
+        # Text "під чистове оздоблення"
+        res_text1 = ResidentialNormalizer.extract_renovation({}, "Квартира після будівельників, під чистове оздоблення")
+        self.assertEqual(res_text1, "white_box")
+
+        # Text "white box"
+        res_text2 = ResidentialNormalizer.extract_renovation({}, "Стан - white box, готова до фінішного ремонту")
+        self.assertEqual(res_text2, "white_box")
+
+    def test_multilot_range_rejection(self):
+        offer1 = {
+            "title": "Оренда офісу 30-200 м2 в центрі",
+            "params": [{"key": "price", "value": 10000}, {"key": "total_area", "value": 50}],
+        }
+        self.assertFalse(is_valid_rental_offer(offer1, "commercial"))
+
+        offer2 = {
+            "title": "Оренда приміщень від 30 м2 до 200 м2",
+            "params": [{"key": "price", "value": 10000}, {"key": "total_area", "value": 50}],
+        }
+        self.assertFalse(is_valid_rental_offer(offer2, "commercial"))
+
+    def test_get_stats_without_repeated_ddl(self):
+        from database import get_stats
+        stats = get_stats()
+        self.assertIn("residential_count", stats)
+        self.assertIn("commercial_count", stats)
+
 
 if __name__ == "__main__":
     unittest.main()

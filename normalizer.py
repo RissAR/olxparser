@@ -85,8 +85,6 @@ STREET_SYNONYMS: Dict[str, str] = {
     "проспект повітряних сил": "проспект Повітрофлотський",
     "змієнка": "вулиця Всеволода Змієнка",
     "всеволода змієнка": "вулиця Всеволода Змієнка",
-    "верхогляда": "вулиця Андрія Верхогляда",
-    "андрія верхогляда": "вулиця Андрія Верхогляда",
     "драгомирова": "вулиця Драгомирова Михайла",
     "михайла драгомирова": "вулиця Драгомирова Михайла",
     "перемоги": "проспект Берестейський",
@@ -507,7 +505,7 @@ class KyivAddressParser:
                 end_char = token_matches[i + length - 1].end()
 
                 # Surrounding context
-                prefix_ctx = clean_text[max(0, start_char - 30):start_char].lower()
+                prefix_ctx = clean_text[max(0, start_char - 50):start_char].lower()
                 suffix_ctx = clean_text[end_char:min(len(clean_text), end_char + 30)].lower()
 
                 # 1. Reject if preceded or followed by metro station indicator
@@ -516,7 +514,7 @@ class KyivAddressParser:
                     prefix_ctx
                 ):
                     continue
-                if re.search(r"^\s*[\"»“'’)]?\s*(?:-\s*\d+\s*(?:хв|хвилин|мин)\s*(?:пішки|пешком|до\s+метро)|метро|станці[яєїі])\b", suffix_ctx):
+                if re.search(r"^\s*[\"»“'’)]?[,;\-–—]?\s*(?:-\s*\d+\s*(?:хв|хвилин|мин)\s*(?:пішки|пешком|до\s+метро)|метро|станці[яєїі])\b", suffix_ctx):
                     continue
 
                 # 2. Reject if preceded by residential/business complex without street keyword
@@ -524,9 +522,16 @@ class KyivAddressParser:
                     continue
 
                 # 3. Reject if preceded or followed by recreation/park indicator
-                if re.search(r"\b(?:зон[а-я]*|парк[а-я]*|урочищ[а-я]*)(?:\s+(?:для|із|з|та|відпочинку))*\s*[\"«„'’]?\s*$", prefix_ctx):
+                if re.search(
+                    r"(?:"
+                    r"\b(?:зон[а-я]*|парк[а-я]*|урочищ[а-я]*|сквер[а-я]*)(?:\s+(?:ім\.?|імені|культури|та|і|відпочинку))*\s*[\"«„'’]?\s*$"
+                    r"|"
+                    r"\b(?:зон[а-я]*|парк[а-я]*|урочищ[а-я]*|сквер[а-я]*)\s*:\s*(?:[^;,\n]{1,30}[;,]\s*)*[\"«„'’]?\s*$"
+                    r")",
+                    prefix_ctx
+                ):
                     continue
-                if re.search(r"^\s*[\"»“'’]?\s*(?:парк[а-я]*|урочищ[а-я]*)\b", suffix_ctx):
+                if re.search(r"^\s*[\"»“'’]?\s*(?:парк[а-я]*|урочищ[а-я]*|сквер[а-я]*)\b", suffix_ctx):
                     continue
 
                 # 4. Reject if followed by district indicator
@@ -580,10 +585,12 @@ class KyivAddressParser:
                 else:
                     canonical = self.search_index[phrase]
 
-                # Disambiguate ЖК Respublika: all buildings are on бульвар Тадея Рильського
+                # Disambiguate ЖК Respublika: residential buildings in this complex are on бульвар Тадея Рильського
                 if canonical == "вулиця Рильського Максима":
                     lower_all = (clean_text + " " + text).lower()
-                    if "республік" in lower_all or "respublika" in lower_all or "таде" in lower_all:
+                    is_respublika_complex = bool(re.search(r"\b(?:жк|комплекс\w*)\s*[\"«„'’]?\s*(?:республік\w*|respublika)\b", lower_all))
+                    has_tadey = "таде" in lower_all
+                    if (is_respublika_complex or has_tadey) and not re.search(r"\b(?:парк\w*|урочищ\w*)\b.*?\bрильськ", lower_all):
                         canonical = "бульвар Тадея Рильського"
 
                 # Calculate confidence score
@@ -917,7 +924,7 @@ class ResidentialNormalizer(BaseNormalizer):
             "3": "cosmetic",        # Косметичний ремонт
             "4": "living",          # Житловий стан
             "5": "after_builders",   # Після будівельників
-            "6": "needs_repair",    # Під чистове оздоблення
+            "6": "white_box",       # Під чистове оздоблення
         }
         if raw is not None and str(raw) in mapping:
             return mapping[str(raw)]
@@ -931,6 +938,8 @@ class ResidentialNormalizer(BaseNormalizer):
             return "cosmetic"
         if re.search(r"\b(?:житлов[ийого]\s+стан|жилое\s+состояние)\b", t_lower):
             return "living"
+        if re.search(r"\b(?:під\s+чистове|під\s+чистову|под\s+чистовую|white\s*box)\b", t_lower):
+            return "white_box"
         if re.search(r"\b(?:після\s+будівельників|после\s+строителей|чернов[ийого])\b", t_lower):
             return "after_builders"
         if re.search(r"\b(?:потребує\s+ремонту|требует\s+ремонта|під\s+ремонт)\b", t_lower):
@@ -1390,21 +1399,37 @@ class CommercialNormalizer(BaseNormalizer):
                 return False
             return True
 
+        def _clean_bc_name(bc_name: str) -> str:
+            words = bc_name.split()
+            if len(words) > 1 and re.match(r"^\d+[а-яА-Яa-zA-Z]?$", words[-1]):
+                tail_phrase = words[-2].lower()
+                parser = get_address_parser()
+                if tail_phrase in parser.search_index:
+                    leading = " ".join(words[:-2]).strip()
+                    return leading
+                if len(words) == 2 and words[0].lower() in parser.search_index:
+                    return ""
+            parser = get_address_parser()
+            if bc_name.lower() in parser.search_index:
+                return ""
+            return bc_name
+
         # 1. Quoted name after BC indicator (most accurate)
         m_q = re.search(r'(?:БЦ|бізнес[- ]центр[аіе]?|бизнес[- ]центр[ае]?|ТОЦ|ТРЦ)\s*["«„]([A-Za-zА-Яа-яІіЇїЄє0-9\s\.\-_]{2,40}?)["»“]', text)
         if m_q:
-            bc = m_q.group(1).strip()
+            bc = _clean_bc_name(m_q.group(1).strip())
             if bc and not bc.isdigit() and _is_valid_bc_name(bc):
                 return bc
 
         # 2. Unquoted proper noun on the same line (no newlines) starting with capital letter
         m_u = re.search(r'(?:БЦ|бізнес[- ]центр[аіе]?|бизнес[- ]центр[ае]?|ТОЦ|ТРЦ)[ \t]+([A-ZА-ЯІЇЄ][A-Za-zА-Яа-яІіЇїЄє0-9\-_]*(?:[ \t]+[A-ZА-ЯІЇЄ0-9][A-Za-zА-Яа-яІіЇїЄє0-9\-_]*){0,2})', text)
         if m_u:
-            bc = m_u.group(1).strip()
-            bc = re.sub(r"[,\.;:]+$", "", bc).strip()
+            raw_bc = m_u.group(1).strip()
+            raw_bc = re.sub(r"[,\.;:]+$", "", raw_bc).strip()
             tail_ctx = text[m_u.end():min(len(text), m_u.end() + 20)].lower()
             if not re.match(r"^\s*(?:район[уі]?|р-н[уі]?|метро)", tail_ctx):
-                if 2 <= len(bc) <= 40 and not bc.isdigit() and _is_valid_bc_name(bc):
+                bc = _clean_bc_name(raw_bc)
+                if bc and 2 <= len(bc) <= 40 and not bc.isdigit() and _is_valid_bc_name(bc):
                     return bc
 
         return ""

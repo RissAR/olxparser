@@ -118,7 +118,11 @@ RE_SEEK_OR_SALE = re.compile(
 
 # Regex to detect multilot range in title when total_area param is missing or range
 RE_MULTILOT_RANGE = re.compile(
-    r"\b(?:від|от)\s+\d+\s+(?:до|-)\s+\d+\s*(?:м[²2]|кв|кв\.?\s*м)\b",
+    r"(?:"
+    r"\b(?:від|от)\s+\d+\s*(?:м[²2]|кв\.?\s*м|кв)?\s*(?:до|-)\s*\d+\s*(?:м[²2]|кв|кв\.?\s*м)\b"
+    r"|"
+    r"\b\d+\s*[-–—]\s*\d+\s*(?:м[²2]|кв|кв\.?\s*м)\b"
+    r")",
     re.IGNORECASE,
 )
 

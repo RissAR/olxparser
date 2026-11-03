@@ -140,6 +140,11 @@ async def lifespan(app: FastAPI):
     if scraper.is_running:
         logger.info("Stopping active scraper on server shutdown...")
         scraper.stop()
+        if _current_scrape_task and not _current_scrape_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(_current_scrape_task), timeout=5.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+                pass
 
     if scheduler.running:
         scheduler.shutdown(wait=False)
@@ -302,11 +307,11 @@ async def download_file(filename: str):
             detail="Invalid filename specified.",
         )
 
-    # Search in project root and exports/
+    # Search in exports/ folder first (persistent volume / current exports), then fallback to project root
     potential_paths = [
-        BASE_DIR / filename,
         BASE_DIR / DEFAULT_EXPORTS_DIR / filename,
         Path(DEFAULT_EXPORTS_DIR) / filename,
+        BASE_DIR / filename,
     ]
 
     target_file: Optional[Path] = None
@@ -335,16 +340,16 @@ async def preview_csv_file(filename: str, limit: int = 15):
     GET /api/preview/{filename}?limit=15
     Returns the headers and first N data rows of a generated CSV file for quick UI preview.
     """
-    if not filename.endswith(".csv") or "/" in filename or "\\" in filename:
+    if not re.match(r"^[\w\.-]+\.csv$", filename) or ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid filename specified.",
         )
 
     potential_paths = [
-        BASE_DIR / filename,
         BASE_DIR / DEFAULT_EXPORTS_DIR / filename,
         Path(DEFAULT_EXPORTS_DIR) / filename,
+        BASE_DIR / filename,
     ]
 
     target_file: Optional[Path] = None

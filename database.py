@@ -402,13 +402,22 @@ def get_scrape_session(session_id: int, db_path: Optional[str] = None) -> Option
 
 
 def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
-    """Retrieves database summary metrics."""
-    init_db(db_path)
+    """Retrieves database summary metrics without executing DDL schema statements on each invocation."""
     conn = get_db_connection(db_path)
-    res_count = conn.execute("SELECT COUNT(*) FROM residential_offers").fetchone()[0]
-    comm_count = conn.execute("SELECT COUNT(*) FROM commercial_offers").fetchone()[0]
-    latest_session = conn.execute("SELECT * FROM scrape_sessions ORDER BY id DESC LIMIT 1").fetchone()
-    conn.close()
+    try:
+        res_count = conn.execute("SELECT COUNT(*) FROM residential_offers").fetchone()[0]
+        comm_count = conn.execute("SELECT COUNT(*) FROM commercial_offers").fetchone()[0]
+        latest_session = conn.execute("SELECT * FROM scrape_sessions ORDER BY id DESC LIMIT 1").fetchone()
+    except sqlite3.OperationalError:
+        conn.close()
+        init_db(db_path)
+        conn = get_db_connection(db_path)
+        res_count = conn.execute("SELECT COUNT(*) FROM residential_offers").fetchone()[0]
+        comm_count = conn.execute("SELECT COUNT(*) FROM commercial_offers").fetchone()[0]
+        latest_session = conn.execute("SELECT * FROM scrape_sessions ORDER BY id DESC LIMIT 1").fetchone()
+    finally:
+        conn.close()
+
     return {
         "residential_count": res_count,
         "commercial_count": comm_count,
