@@ -21,8 +21,10 @@ Features:
 import asyncio
 import json
 import logging
+import os
 import random
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
@@ -271,6 +273,7 @@ class OLXHttpClient:
         max_retries: int = 5,
         backoff_factor: float = 2.0,
         timeout: float = 20.0,
+        proxy: Optional[str] = None,
     ):
         self.semaphore = asyncio.Semaphore(max_concurrency)
         self.min_delay = min_delay
@@ -278,15 +281,26 @@ class OLXHttpClient:
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.timeout = timeout
+        self.proxy: Optional[str] = proxy or os.getenv("OLX_PROXY")
         self.session: Optional[AsyncSession] = None
+
+    async def set_proxy(self, proxy: Optional[str]) -> None:
+        """Updates proxy settings; if session exists and proxy changes, closes session for re-initialization."""
+        clean_proxy = proxy.strip() if proxy and proxy.strip() else None
+        if clean_proxy != self.proxy:
+            self.proxy = clean_proxy
+            await self.close()
 
     async def get_session(self) -> AsyncSession:
         if self.session is None:
-            self.session = AsyncSession(
-                impersonate="chrome",
-                headers=DEFAULT_HEADERS,
-                timeout=self.timeout,
-            )
+            kwargs: Dict[str, Any] = {
+                "impersonate": "chrome",
+                "headers": DEFAULT_HEADERS,
+                "timeout": self.timeout,
+            }
+            if self.proxy:
+                kwargs["proxy"] = self.proxy
+            self.session = AsyncSession(**kwargs)
         return self.session
 
     async def close(self) -> None:
@@ -367,6 +381,42 @@ class OLXHttpClient:
 
             logger.error("Failed to fetch %s after %s attempts.", params, self.max_retries)
             return None
+
+
+async def test_proxy_connection(proxy_url: str, timeout: float = 10.0) -> Dict[str, Any]:
+    """Tests if a given proxy can reach OLX API using curl_cffi Chrome impersonation."""
+    start_time = time.time()
+    try:
+        async with AsyncSession(
+            impersonate="chrome",
+            headers=DEFAULT_HEADERS,
+            timeout=timeout,
+            proxy=proxy_url,
+        ) as session:
+            resp = await session.get(f"{BASE_API_URL}?offset=0&limit=1&city_id={CITY_ID_KYIV}")
+            latency_ms = round((time.time() - start_time) * 1000)
+            if resp.status_code == 200:
+                return {
+                    "success": True,
+                    "status_code": resp.status_code,
+                    "latency_ms": latency_ms,
+                    "message": f"Проксі активний! Затримка: {latency_ms} мс (OLX відповів 200 OK)",
+                }
+            else:
+                return {
+                    "success": False,
+                    "status_code": resp.status_code,
+                    "latency_ms": latency_ms,
+                    "message": f"OLX повернув HTTP {resp.status_code} через цей проксі",
+                }
+    except Exception as exc:
+        latency_ms = round((time.time() - start_time) * 1000)
+        return {
+            "success": False,
+            "status_code": None,
+            "latency_ms": latency_ms,
+            "message": f"Помилка з'єднання: {str(exc)}",
+        }
 
 
 class SliceGenerator:
@@ -615,12 +665,14 @@ class OLXScraper:
         max_concurrency: int = 3,
         min_delay: float = 0.5,
         max_delay: float = 1.5,
+        proxy: Optional[str] = None,
     ):
         self.db_path = db_path
         self.client = OLXHttpClient(
             max_concurrency=max_concurrency,
             min_delay=min_delay,
             max_delay=max_delay,
+            proxy=proxy,
         )
         self.slice_generator = SliceGenerator(self.client)
         self.stop_event = asyncio.Event()
@@ -649,6 +701,16 @@ class OLXScraper:
 
     def get_status(self) -> Dict[str, Any]:
         """Returns the current state dictionary for API / UI polling."""
+        masked_proxy = None
+        if self.client.proxy:
+            p = self.client.proxy
+            if "@" in p:
+                prefix, hostpart = p.split("@", 1)
+                proto = prefix.split("://")[0] if "://" in prefix else "http"
+                masked_proxy = f"{proto}://***@{hostpart}"
+            else:
+                masked_proxy = p
+
         return {
             "is_running": self.is_running,
             "session_id": self.session_id,
@@ -663,6 +725,7 @@ class OLXScraper:
             "error_message": self.error_message,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "proxy": masked_proxy,
         }
 
     async def run(
@@ -671,15 +734,20 @@ class OLXScraper:
         max_offers: Optional[int] = None,
         max_slices: Optional[int] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+        proxy: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Executes a scrape run for the requested category.
         category: 'residential', 'commercial', or 'all'
         max_offers: optional cap on processed offers (for testing/verification)
         max_slices: optional cap on number of slices to process
+        proxy: optional proxy URL (e.g. 'http://user:pass@1.2.3.4:8080')
         """
         if self.is_running:
             raise RuntimeError("Scraper is already running a session.")
+
+        if proxy is not None:
+            await self.client.set_proxy(proxy.strip() if proxy.strip() else None)
 
         self.is_running = True
         self.stop_event.clear()
@@ -908,11 +976,11 @@ class OLXScraper:
 _scraper_instance: Optional[OLXScraper] = None
 
 
-def get_scraper_instance(db_path: Optional[str] = None) -> OLXScraper:
+def get_scraper_instance(db_path: Optional[str] = None, proxy: Optional[str] = None) -> OLXScraper:
     """Returns the singleton instance of OLXScraper."""
     global _scraper_instance
     if _scraper_instance is None:
-        _scraper_instance = OLXScraper(db_path=db_path)
+        _scraper_instance = OLXScraper(db_path=db_path, proxy=proxy)
     return _scraper_instance
 
 
@@ -938,13 +1006,20 @@ if __name__ == "__main__":
         default=None,
         help="Optional maximum number of slices to process",
     )
+    cli_parser.add_argument(
+        "--proxy",
+        type=str,
+        default=None,
+        help="Optional proxy URL (e.g. http://1.2.3.4:8080)",
+    )
     args = cli_parser.parse_args()
 
-    scraper = OLXScraper()
+    scraper = OLXScraper(proxy=args.proxy)
     asyncio.run(
         scraper.run(
             category=args.category,
             max_offers=args.max_offers,
             max_slices=args.max_slices,
+            proxy=args.proxy,
         )
     )

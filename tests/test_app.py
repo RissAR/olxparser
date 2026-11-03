@@ -21,6 +21,7 @@ import os
 import unittest
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from unittest.mock import AsyncMock, patch
 from urllib.parse import urlencode
 
 from app import WEEKLY_JOB_ID, app, lifespan, scheduler
@@ -339,6 +340,44 @@ class TestAppEndpoints(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(scheduler.running)
             job = scheduler.get_job(WEEKLY_JOB_ID)
             self.assertIsNotNone(job)
+
+    async def test_proxy_test_endpoint_empty_or_invalid(self):
+        """POST /api/proxy/test without proxy or empty string returns 400 Bad Request."""
+        resp = await self.client.post("/api/proxy/test", json={"proxy": ""})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("detail", resp.json())
+
+        resp2 = await self.client.post("/api/proxy/test", json={"proxy": "   "})
+        self.assertEqual(resp2.status_code, 400)
+
+    @patch("app.test_proxy_connection", new_callable=AsyncMock)
+    async def test_proxy_test_endpoint_success(self, mock_test):
+        """POST /api/proxy/test returns 200 with test results when connection succeeds."""
+        mock_test.return_value = {
+            "success": True,
+            "status_code": 200,
+            "latency_ms": 142.5,
+            "message": "Proxy connection successful",
+        }
+        resp = await self.client.post("/api/proxy/test", json={"proxy": "http://user:pass@1.2.3.4:8080"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["latency_ms"], 142.5)
+        mock_test.assert_awaited_once_with("http://user:pass@1.2.3.4:8080")
+
+    @patch("app.run_scraping_workflow", new_callable=AsyncMock)
+    async def test_scrape_start_accepts_proxy(self, mock_workflow):
+        """POST /api/scrape/start accepts proxy string in payload and triggers workflow."""
+        payload = {
+            "category": "commercial",
+            "proxy": "socks5://1.2.3.4:1080",
+            "auto_export": False,
+        }
+        resp = await self.client.post("/api/scrape/start", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "started")
 
 
 if __name__ == "__main__":

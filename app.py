@@ -37,7 +37,7 @@ from exporter import (
     export_residential,
     list_exported_files,
 )
-from scraper import OLXScraper, get_scraper_instance
+from scraper import OLXScraper, get_scraper_instance, test_proxy_connection
 
 # Setup logging
 logger = logging.getLogger("olx_web_app")
@@ -72,6 +72,7 @@ async def run_scraping_workflow(
     max_slices: Optional[int] = None,
     auto_export: bool = True,
     only_latest_date: bool = True,
+    proxy: Optional[str] = None,
 ) -> None:
     """
     Executes the scraping workflow in the background.
@@ -79,18 +80,20 @@ async def run_scraping_workflow(
     """
     scraper = get_scraper_instance()
     logger.info(
-        "Starting background scrape workflow: category=%s, max_offers=%s, max_slices=%s, auto_export=%s, only_latest_date=%s",
+        "Starting background scrape workflow: category=%s, max_offers=%s, max_slices=%s, auto_export=%s, only_latest_date=%s, proxy=%s",
         category,
         max_offers,
         max_slices,
         auto_export,
         only_latest_date,
+        bool(proxy),
     )
     try:
         await scraper.run(
             category=category,
             max_offers=max_offers,
             max_slices=max_slices,
+            proxy=proxy,
         )
         if auto_export and scraper.status in ("completed", "stopped"):
             logger.info("Scraper finished (%s). Running automatic CSV export...", scraper.status)
@@ -177,11 +180,16 @@ class ScrapeRequest(BaseModel):
     max_slices: Optional[int] = Field(default=None, ge=1)
     auto_export: bool = True
     only_latest_date: bool = True
+    proxy: Optional[str] = None
 
 
 class ExportRequest(BaseModel):
     category: str = Field(default="all", pattern="^(all|residential|commercial)$")
     only_latest_date: bool = True
+
+
+class ProxyTestRequest(BaseModel):
+    proxy: str
 
 
 # -----------------------------------------------------------------------------
@@ -202,6 +210,21 @@ async def index_view(request: Request):
 # -----------------------------------------------------------------------------
 # REST API Endpoints
 # -----------------------------------------------------------------------------
+@app.post("/api/proxy/test")
+async def test_proxy_endpoint(req: ProxyTestRequest):
+    """
+    POST /api/proxy/test
+    Tests connection to OLX API through the specified proxy without starting a scrape.
+    """
+    if not req.proxy or not req.proxy.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Вкажіть адресу проксі для тестування.",
+        )
+    result = await test_proxy_connection(req.proxy.strip())
+    return result
+
+
 @app.post("/api/scrape/start")
 async def start_scraping(req: ScrapeRequest):
     """
@@ -223,6 +246,7 @@ async def start_scraping(req: ScrapeRequest):
             max_slices=req.max_slices,
             auto_export=req.auto_export,
             only_latest_date=req.only_latest_date,
+            proxy=req.proxy,
         )
     )
 
@@ -233,6 +257,7 @@ async def start_scraping(req: ScrapeRequest):
         "max_slices": req.max_slices,
         "auto_export": req.auto_export,
         "only_latest_date": req.only_latest_date,
+        "proxy": bool(req.proxy),
     }
 
 

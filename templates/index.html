@@ -227,6 +227,74 @@
             </label>
           </div>
 
+          <!-- Proxy Configuration (Collapsible) -->
+          <details id="proxyDetails" class="text-xs text-slate-400 pt-1 group border-t border-slate-800/80 mt-2">
+            <summary class="cursor-pointer hover:text-slate-200 select-none flex items-center justify-between py-1.5 font-semibold text-slate-300">
+              <span class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span>Налаштування Проксі (Опціонально)</span>
+              </span>
+              <span id="proxyBadge" class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">Вимкнено</span>
+            </summary>
+
+            <div class="space-y-2.5 pt-2 pb-1">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="proxyEnabledCheck" onchange="toggleProxyFields()" class="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0">
+                <label for="proxyEnabledCheck" class="text-xs text-slate-300 cursor-pointer select-none">
+                  Використовувати проксі для збору
+                </label>
+              </div>
+
+              <div id="proxyFieldsContainer" class="space-y-2 opacity-40 pointer-events-none transition duration-200">
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="text-[10px] text-slate-400 block mb-0.5">Протокол</label>
+                    <select id="proxyProtoInput" onchange="saveProxySettings()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                      <option value="http">HTTP</option>
+                      <option value="socks5">SOCKS5</option>
+                    </select>
+                  </div>
+                  <div class="col-span-2">
+                    <label class="text-[10px] text-slate-400 block mb-0.5">IP або Хост</label>
+                    <input type="text" id="proxyHostInput" oninput="saveProxySettings()" placeholder="напр. 185.120.34.10"
+                           class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                  <div>
+                    <label class="text-[10px] text-slate-400 block mb-0.5">Порт</label>
+                    <input type="number" id="proxyPortInput" oninput="saveProxySettings()" placeholder="8080"
+                           class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
+                  </div>
+                  <div>
+                    <label class="text-[10px] text-slate-400 block mb-0.5">Логін (опція)</label>
+                    <input type="text" id="proxyUserInput" oninput="saveProxySettings()" placeholder="user"
+                           class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
+                  </div>
+                  <div>
+                    <label class="text-[10px] text-slate-400 block mb-0.5">Пароль (опція)</label>
+                    <input type="password" id="proxyPassInput" oninput="saveProxySettings()" placeholder="pass"
+                           class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500">
+                  </div>
+                </div>
+
+                <div class="pt-1 flex items-center justify-between gap-2">
+                  <button type="button" id="testProxyBtn" onclick="testProxyConnection()"
+                          class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span>Перевірити проксі</span>
+                  </button>
+                  <span id="proxyTestResult" class="text-[11px] truncate text-slate-400"></span>
+                </div>
+              </div>
+            </div>
+          </details>
+
           <!-- Buttons -->
           <div class="pt-2 space-y-2">
             <div class="grid grid-cols-2 gap-2">
@@ -567,18 +635,140 @@
       }
     }
 
+    function toggleProxyFields() {
+      const enabled = document.getElementById('proxyEnabledCheck')?.checked;
+      const container = document.getElementById('proxyFieldsContainer');
+      const badge = document.getElementById('proxyBadge');
+      if (enabled) {
+        if (container) container.classList.remove('opacity-40', 'pointer-events-none');
+        if (badge) {
+          badge.className = 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+          badge.textContent = 'Увімкнено';
+        }
+      } else {
+        if (container) container.classList.add('opacity-40', 'pointer-events-none');
+        if (badge) {
+          badge.className = 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400';
+          badge.textContent = 'Вимкнено';
+        }
+      }
+      saveProxySettings();
+    }
+
+    function getConstructedProxyUrl() {
+      const enabled = document.getElementById('proxyEnabledCheck')?.checked;
+      if (!enabled) return null;
+      const proto = document.getElementById('proxyProtoInput')?.value || 'http';
+      const host = document.getElementById('proxyHostInput')?.value?.trim();
+      const port = document.getElementById('proxyPortInput')?.value?.trim();
+      const user = document.getElementById('proxyUserInput')?.value?.trim();
+      const pass = document.getElementById('proxyPassInput')?.value?.trim();
+
+      if (!host || !port) return null;
+
+      let auth = '';
+      if (user && pass) {
+        auth = `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@`;
+      } else if (user) {
+        auth = `${encodeURIComponent(user)}@`;
+      }
+      return `${proto}://${auth}${host}:${port}`;
+    }
+
+    function saveProxySettings() {
+      const settings = {
+        enabled: document.getElementById('proxyEnabledCheck')?.checked || false,
+        proto: document.getElementById('proxyProtoInput')?.value || 'http',
+        host: document.getElementById('proxyHostInput')?.value || '',
+        port: document.getElementById('proxyPortInput')?.value || '',
+        user: document.getElementById('proxyUserInput')?.value || '',
+        pass: document.getElementById('proxyPassInput')?.value || '',
+      };
+      localStorage.setItem('olx_proxy_settings', JSON.stringify(settings));
+    }
+
+    function loadProxySettings() {
+      try {
+        const raw = localStorage.getItem('olx_proxy_settings');
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (s.enabled !== undefined && document.getElementById('proxyEnabledCheck')) document.getElementById('proxyEnabledCheck').checked = s.enabled;
+        if (s.proto && document.getElementById('proxyProtoInput')) document.getElementById('proxyProtoInput').value = s.proto;
+        if (s.host && document.getElementById('proxyHostInput')) document.getElementById('proxyHostInput').value = s.host;
+        if (s.port && document.getElementById('proxyPortInput')) document.getElementById('proxyPortInput').value = s.port;
+        if (s.user && document.getElementById('proxyUserInput')) document.getElementById('proxyUserInput').value = s.user;
+        if (s.pass && document.getElementById('proxyPassInput')) document.getElementById('proxyPassInput').value = s.pass;
+        toggleProxyFields();
+      } catch (e) {
+        console.error('Failed to load proxy settings:', e);
+      }
+    }
+
+    async function testProxyConnection() {
+      const proxyUrl = getConstructedProxyUrl();
+      const resultEl = document.getElementById('proxyTestResult');
+      const btn = document.getElementById('testProxyBtn');
+
+      if (!proxyUrl) {
+        if (resultEl) {
+          resultEl.className = 'text-[11px] text-amber-400 truncate';
+          resultEl.textContent = 'Вкажіть IP та порт проксі';
+        }
+        return;
+      }
+
+      if (btn) btn.disabled = true;
+      if (resultEl) {
+        resultEl.className = 'text-[11px] text-blue-400 truncate animate-pulse';
+        resultEl.textContent = 'Тестування з\'єднання...';
+      }
+
+      try {
+        const res = await fetch('/api/proxy/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proxy: proxyUrl })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (resultEl) {
+            resultEl.className = 'text-[11px] text-emerald-400 font-medium truncate';
+            resultEl.textContent = data.message || `Успіх (${data.latency_ms} мс)`;
+          }
+          showToast('Проксі працює коректно!', 'success');
+        } else {
+          const errMsg = data.message || data.detail || 'Помилка проксі';
+          if (resultEl) {
+            resultEl.className = 'text-[11px] text-rose-400 font-medium truncate';
+            resultEl.textContent = errMsg;
+          }
+          showToast(errMsg, 'error');
+        }
+      } catch (err) {
+        if (resultEl) {
+          resultEl.className = 'text-[11px] text-rose-400 truncate';
+          resultEl.textContent = 'Збій перевірки: ' + err.message;
+        }
+        showToast('Помилка з\'єднання: ' + err.message, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
     async function startScrape() {
       const category = document.querySelector('input[name="category"]:checked')?.value || 'all';
       const maxOffersVal = document.getElementById('maxOffersInput').value;
       const maxSlicesVal = document.getElementById('maxSlicesInput').value;
       const autoExport = document.getElementById('autoExportCheck').checked;
       const onlyLatestDate = document.getElementById('onlyLatestDateCheck')?.checked ?? true;
+      const proxyUrl = getConstructedProxyUrl();
 
       const payload = {
         category: category,
         auto_export: autoExport,
         only_latest_date: onlyLatestDate
       };
+      if (proxyUrl) payload.proxy = proxyUrl;
       if (maxOffersVal) payload.max_offers = parseInt(maxOffersVal, 10);
       if (maxSlicesVal) payload.max_slices = parseInt(maxSlicesVal, 10);
 
@@ -933,6 +1123,7 @@
 
     // Initial load and periodic polling every 3s
     document.addEventListener('DOMContentLoaded', () => {
+      loadProxySettings();
       updateStatus();
       fetchFilesList();
       pollInterval = setInterval(updateStatus, 3000);
