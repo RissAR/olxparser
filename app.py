@@ -71,6 +71,7 @@ async def run_scraping_workflow(
     max_offers: Optional[int] = None,
     max_slices: Optional[int] = None,
     auto_export: bool = True,
+    only_latest_date: bool = True,
 ) -> None:
     """
     Executes the scraping workflow in the background.
@@ -78,11 +79,12 @@ async def run_scraping_workflow(
     """
     scraper = get_scraper_instance()
     logger.info(
-        "Starting background scrape workflow: category=%s, max_offers=%s, max_slices=%s, auto_export=%s",
+        "Starting background scrape workflow: category=%s, max_offers=%s, max_slices=%s, auto_export=%s, only_latest_date=%s",
         category,
         max_offers,
         max_slices,
         auto_export,
+        only_latest_date,
     )
     try:
         await scraper.run(
@@ -92,7 +94,7 @@ async def run_scraping_workflow(
         )
         if auto_export and scraper.status in ("completed", "stopped"):
             logger.info("Scraper finished (%s). Running automatic CSV export...", scraper.status)
-            export_all()
+            export_all(only_latest_date=only_latest_date, dated_archive=True)
             logger.info("Automatic CSV export completed successfully.")
     except asyncio.CancelledError:
         logger.info("Scrape task was cancelled.")
@@ -110,7 +112,7 @@ async def scheduled_weekly_job() -> None:
     logger.info("APScheduler executing weekly full scrape & export job...")
     global _current_scrape_task
     _current_scrape_task = asyncio.create_task(
-        run_scraping_workflow(category="all", auto_export=True)
+        run_scraping_workflow(category="all", auto_export=True, only_latest_date=True)
     )
 
 
@@ -174,10 +176,12 @@ class ScrapeRequest(BaseModel):
     max_offers: Optional[int] = Field(default=None, ge=1)
     max_slices: Optional[int] = Field(default=None, ge=1)
     auto_export: bool = True
+    only_latest_date: bool = True
 
 
 class ExportRequest(BaseModel):
     category: str = Field(default="all", pattern="^(all|residential|commercial)$")
+    only_latest_date: bool = True
 
 
 # -----------------------------------------------------------------------------
@@ -218,6 +222,7 @@ async def start_scraping(req: ScrapeRequest):
             max_offers=req.max_offers,
             max_slices=req.max_slices,
             auto_export=req.auto_export,
+            only_latest_date=req.only_latest_date,
         )
     )
 
@@ -227,6 +232,7 @@ async def start_scraping(req: ScrapeRequest):
         "max_offers": req.max_offers,
         "max_slices": req.max_slices,
         "auto_export": req.auto_export,
+        "only_latest_date": req.only_latest_date,
     }
 
 
@@ -396,25 +402,26 @@ async def trigger_export(req: Optional[ExportRequest] = None):
     Triggers on-demand CSV export of current SQLite database records.
     """
     cat = req.category if req else "all"
+    only_latest = req.only_latest_date if req else True
     exported_results: List[Dict[str, Any]] = []
 
     try:
         if cat == "residential":
-            info = export_residential()
+            info = export_residential(only_latest_date=only_latest)
             exported_results.append(info)
         elif cat == "commercial":
-            info = export_commercial()
+            info = export_commercial(only_latest_date=only_latest)
             exported_results.append(info)
         else:
-            res = export_all()
-            if "residential" in res:
-                exported_results.append(res["residential"])
-            if "commercial" in res:
-                exported_results.append(res["commercial"])
+            res = export_all(only_latest_date=only_latest, dated_archive=True)
+            for k in ("residential", "commercial", "dated_residential", "dated_commercial"):
+                if k in res:
+                    exported_results.append(res[k])
 
         return {
             "status": "success",
             "category": cat,
+            "only_latest_date": only_latest,
             "exported_files": exported_results,
         }
     except Exception as exc:
@@ -444,7 +451,7 @@ async def cron_trigger():
 
     global _current_scrape_task
     _current_scrape_task = asyncio.create_task(
-        run_scraping_workflow(category="all", auto_export=True)
+        run_scraping_workflow(category="all", auto_export=True, only_latest_date=True)
     )
     return {
         "status": "started",

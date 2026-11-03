@@ -307,6 +307,70 @@ class TestOLXScraperLifecycle(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn(status["status"], ("stopped", "completed"))
 
+    async def test_category_all_quota_distribution(self):
+        """
+        Verifies that when category='all' and max_offers=4, scraper distributes
+        the quota equally: 2 residential and 2 commercial offers, and stops cleanly.
+        """
+        res_mock_offers = [
+            {
+                "id": 2000 + i,
+                "url": f"https://www.olx.ua/d/uk/obyavlenie/res-{i}.html",
+                "title": f"Здам 1к квартиру вул. Хрещатик {i}",
+                "offer_type": "offer",
+                "business": False,
+                "params": [
+                    {"key": "price", "value": {"value": 20000 + i * 1000, "currency": "UAH"}},
+                    {"key": "total_area", "value": "45"},
+                ],
+            }
+            for i in range(1, 5)
+        ]
+
+        comm_mock_offers = [
+            {
+                "id": 3000 + i,
+                "url": f"https://www.olx.ua/d/uk/obyavlenie/comm-{i}.html",
+                "title": f"Здам офіс вул. Велика Васильківська {i}",
+                "offer_type": "offer",
+                "business": True,
+                "params": [
+                    {"key": "price", "value": {"value": 30000 + i * 1000, "currency": "UAH"}},
+                    {"key": "total_area", "value": "75"},
+                ],
+            }
+            for i in range(1, 5)
+        ]
+
+        scraper = OLXScraper(db_path=self.temp_db)
+
+        async def mock_request_json(url=None, params=None, stop_event=None):
+            if not params:
+                return {"metadata": {"visible_total_count": 0}}
+            # Count request
+            if params.get("limit") == 1:
+                return {"metadata": {"visible_total_count": 4}}
+            # Data fetch request
+            if params.get("limit") == 40:
+                cat_id = params.get("category_id")
+                if cat_id == RESIDENTIAL_CATEGORY_ID:
+                    return {"data": res_mock_offers}
+                else:
+                    return {"data": comm_mock_offers}
+            return {"metadata": {"visible_total_count": 0}}
+
+        scraper.client.request_json = AsyncMock(side_effect=mock_request_json)
+
+        status = await scraper.run(category="all", max_offers=4)
+        self.assertEqual(status["status"], "completed")
+        self.assertEqual(status["processed_count"], 4)
+        self.assertEqual(status["processed_residential"], 2)
+        self.assertEqual(status["processed_commercial"], 2)
+
+        stats = get_stats(self.temp_db)
+        self.assertEqual(stats["residential_count"], 2)
+        self.assertEqual(stats["commercial_count"], 2)
+
     async def test_audit_fixes_points_9_and_10(self):
         mock_client = AsyncMock(spec=OLXHttpClient)
 

@@ -632,6 +632,8 @@ class OLXScraper:
         self.status: str = "idle"  # idle, running, completed, stopped, failed
         self.total_found: int = 0
         self.processed_count: int = 0
+        self.processed_residential: int = 0
+        self.processed_commercial: int = 0
         self.errors_count: int = 0
         self.current_slice_label: str = ""
         self.error_message: Optional[str] = None
@@ -654,6 +656,8 @@ class OLXScraper:
             "status": self.status,
             "total_found": self.total_found,
             "processed_count": self.processed_count,
+            "processed_residential": self.processed_residential,
+            "processed_commercial": self.processed_commercial,
             "errors_count": self.errors_count,
             "current_slice": self.current_slice_label,
             "error_message": self.error_message,
@@ -683,10 +687,16 @@ class OLXScraper:
         self.status = "running"
         self.total_found = 0
         self.processed_count = 0
+        self.processed_residential = 0
+        self.processed_commercial = 0
         self.errors_count = 0
         self.error_message = None
         self.started_at = datetime.now().isoformat()
         self.finished_at = None
+
+        # Quotas for balanced category collection when category="all" and max_offers is set
+        res_quota = max(1, max_offers // 2) if (category == "all" and max_offers is not None) else None
+        comm_quota = (max_offers - res_quota) if (category == "all" and max_offers is not None) else None
 
         # Ensure DB schema exists
         init_db(self.db_path)
@@ -701,6 +711,20 @@ class OLXScraper:
             async for s in self.slice_generator.generate_slices(category=category, stop_event=self.stop_event):
                 if self.stop_event.is_set():
                     break
+
+                # Category quota checks for category="all"
+                if category == "all" and max_offers is not None:
+                    if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                        logger.info(
+                            "Reached target quotas: residential %s/%s, commercial %s/%s",
+                            self.processed_residential, res_quota, self.processed_commercial, comm_quota
+                        )
+                        self.stop_event.set()
+                        break
+                    if s.category_type == "residential" and self.processed_residential >= res_quota:
+                        continue
+                    if s.category_type == "commercial" and self.processed_commercial >= comm_quota:
+                        continue
 
                 slice_counter += 1
                 self.current_slice_label = s.label
@@ -773,14 +797,39 @@ class OLXScraper:
                                 raw_offer.get("url"), parse_err
                             )
 
+                    # Cap batches to quotas if limit is reached
+                    if s.category_type == "residential":
+                        if category == "all" and res_quota is not None:
+                            rem_res = max(0, res_quota - self.processed_residential)
+                            if len(res_batch) > rem_res:
+                                res_batch = res_batch[:rem_res]
+                        elif max_offers is not None:
+                            rem = max(0, max_offers - self.processed_count)
+                            if len(res_batch) > rem:
+                                res_batch = res_batch[:rem]
+
+                    if s.category_type == "commercial":
+                        if category == "all" and comm_quota is not None:
+                            rem_comm = max(0, comm_quota - self.processed_commercial)
+                            if len(comm_batch) > rem_comm:
+                                comm_batch = comm_batch[:rem_comm]
+                        elif max_offers is not None:
+                            rem = max(0, max_offers - self.processed_count)
+                            if len(comm_batch) > rem:
+                                comm_batch = comm_batch[:rem]
+
                     # Save batches to SQLite
                     if res_batch:
                         upsert_residential_offers_batch(res_batch, db_path=self.db_path)
-                        self.processed_count += len(res_batch)
+                        count_res = len(res_batch)
+                        self.processed_residential += count_res
+                        self.processed_count += count_res
 
                     if comm_batch:
                         upsert_commercial_offers_batch(comm_batch, db_path=self.db_path)
-                        self.processed_count += len(comm_batch)
+                        count_comm = len(comm_batch)
+                        self.processed_commercial += count_comm
+                        self.processed_count += count_comm
 
                     # Update session
                     update_scrape_session(
@@ -795,10 +844,23 @@ class OLXScraper:
                         on_progress(self.get_status())
 
                     # Check max offers limit for verification/tests
-                    if max_offers and self.processed_count >= max_offers:
-                        logger.info("Reached target max_offers limit: %s", max_offers)
-                        self.stop_event.set()
-                        break
+                    if category == "all" and max_offers is not None:
+                        if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                            logger.info(
+                                "Reached target max_offers limit: %s (residential: %s, commercial: %s)",
+                                max_offers, self.processed_residential, self.processed_commercial
+                            )
+                            self.stop_event.set()
+                            break
+                        if s.category_type == "residential" and self.processed_residential >= res_quota:
+                            break
+                        if s.category_type == "commercial" and self.processed_commercial >= comm_quota:
+                            break
+                    else:
+                        if max_offers and self.processed_count >= max_offers:
+                            logger.info("Reached target max_offers limit: %s", max_offers)
+                            self.stop_event.set()
+                            break
 
                 if max_slices and slice_counter >= max_slices:
                     logger.info("Reached target max_slices limit: %s", max_slices)

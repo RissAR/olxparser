@@ -219,6 +219,14 @@
             </label>
           </div>
 
+          <!-- Only latest date toggle -->
+          <div class="flex items-center gap-2 pt-0.5">
+            <input type="checkbox" id="onlyLatestDateCheck" checked class="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0">
+            <label for="onlyLatestDateCheck" class="text-xs text-slate-300 cursor-pointer select-none">
+              Експортувати лише актуальний зріз (остання дата)
+            </label>
+          </div>
+
           <!-- Buttons -->
           <div class="pt-2 space-y-2">
             <div class="grid grid-cols-2 gap-2">
@@ -564,10 +572,12 @@
       const maxOffersVal = document.getElementById('maxOffersInput').value;
       const maxSlicesVal = document.getElementById('maxSlicesInput').value;
       const autoExport = document.getElementById('autoExportCheck').checked;
+      const onlyLatestDate = document.getElementById('onlyLatestDateCheck')?.checked ?? true;
 
       const payload = {
         category: category,
-        auto_export: autoExport
+        auto_export: autoExport,
+        only_latest_date: onlyLatestDate
       };
       if (maxOffersVal) payload.max_offers = parseInt(maxOffersVal, 10);
       if (maxSlicesVal) payload.max_slices = parseInt(maxSlicesVal, 10);
@@ -614,8 +624,13 @@
       const origText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span>Експорт...</span>';
+      const onlyLatestDate = document.getElementById('onlyLatestDateCheck')?.checked ?? true;
       try {
-        const res = await fetch('/api/export', { method: 'POST' });
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: 'all', only_latest_date: onlyLatestDate })
+        });
         const data = await res.json();
         if (res.ok) {
           await fetchFilesList();

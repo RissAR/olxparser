@@ -1,13 +1,12 @@
-# Git
+# Environments & Git
+.venv
+venv/
 .git
 .gitignore
+.agent
 
-# Python environment & cache
-.venv
-venv
-env
-ENV
-__pycache__
+# Python bytecode & cache
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -35,7 +34,6 @@ tests/
 htmlcov/
 
 # Editor & System
-.agent/
 .idea/
 .vscode/
 *.swp
@@ -43,13 +41,18 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Persistent databases and local data exports
+# Persistent databases & runtime storage
+data/
+exports/
+output/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
-data/
-output/
-exports/
+*.zip
+
+# Generated local CSVs
 olx_residential_kyiv.csv
 olx_commercial_kyiv.csv
 

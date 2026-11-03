@@ -248,6 +248,53 @@ class TestCSVExport(unittest.TestCase):
             self.assertEqual(len(lines), 1)
             self.assertEqual(len(lines[0]), 35)
 
+    def test_export_only_latest_date(self):
+        # Insert older residential and commercial offers
+        older_res = dict(self.mock_res)
+        older_res["url"] = "https://www.olx.ua/d/uk/obyavlenie/test-res-old.html"
+        older_res["seen_date"] = "2026-10-20"
+        upsert_residential_offer(older_res, db_path=self.db_path)
+
+        older_comm = dict(self.mock_comm)
+        older_comm["url"] = "https://www.olx.ua/d/uk/obyavlenie/test-comm-old.html"
+        older_comm["seen_date"] = "2026-10-20"
+        upsert_commercial_offer(older_comm, db_path=self.db_path)
+
+        # Default: only_latest_date=False returns all 2 offers
+        out_all = os.path.join(self.temp_dir.name, "all_res.csv")
+        info_all = export_residential(db_path=self.db_path, output_path=out_all, only_latest_date=False)
+        self.assertEqual(info_all["rows_count"], 2)
+
+        # only_latest_date=True returns only 1 latest offer (2026-11-03)
+        out_latest = os.path.join(self.temp_dir.name, "latest_res.csv")
+        info_latest = export_residential(db_path=self.db_path, output_path=out_latest, only_latest_date=True)
+        self.assertEqual(info_latest["rows_count"], 1)
+
+        # Also verify database function directly with since_days
+        from database import get_all_residential_offers, get_all_commercial_offers
+        rows_since = get_all_residential_offers(db_path=self.db_path, since_days=5)
+        self.assertEqual(len(rows_since), 1)
+
+        rows_all = get_all_residential_offers(db_path=self.db_path, since_days=20)
+        self.assertEqual(len(rows_all), 2)
+
+    def test_export_all_dated_archive(self):
+        export_dir = os.path.join(self.temp_dir.name, "dated_archive_exports")
+        results = export_all(db_path=self.db_path, output_dir=export_dir, dated_archive=True)
+
+        self.assertIn("residential", results)
+        self.assertIn("commercial", results)
+        self.assertIn("dated_residential", results)
+        self.assertIn("dated_commercial", results)
+
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        dated_res = Path(export_dir) / f"olx_residential_kyiv_{today_str}.csv"
+        dated_comm = Path(export_dir) / f"olx_commercial_kyiv_{today_str}.csv"
+
+        self.assertTrue(dated_res.exists())
+        self.assertTrue(dated_comm.exists())
+
 
 class TestVerificationAndFileListing(unittest.TestCase):
     """Tests for verify_csv_against_template and list_exported_files."""

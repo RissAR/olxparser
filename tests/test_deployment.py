@@ -45,10 +45,20 @@ class TestDeploymentFiles(unittest.TestCase):
 
         content = dockerignore.read_text(encoding="utf-8")
         self.assertIn(".venv", content)
+        self.assertIn("venv/", content)
         self.assertIn(".git", content)
+        self.assertIn(".gitignore", content)
         self.assertIn(".agent", content)
+        self.assertIn("__pycache__/", content)
+        self.assertIn("*.py[cod]", content)
+        self.assertIn("*$py.class", content)
         self.assertIn("tests/", content)
+        self.assertIn("data/", content)
+        self.assertIn("exports/", content)
         self.assertIn("*.db", content)
+        self.assertIn("*.db-shm", content)
+        self.assertIn("*.db-wal", content)
+        self.assertIn("*.zip", content)
 
     def test_docker_compose_structure(self):
         compose_file = self.root_dir / "docker-compose.yml"
@@ -80,6 +90,8 @@ class TestDeploymentFiles(unittest.TestCase):
         self.assertIn("uvicorn app:app", content)
         self.assertIn("Restart=always", content)
         self.assertIn("Europe/Kyiv", content)
+        self.assertIn('Environment="OLX_DB_PATH=', content)
+        self.assertIn('Environment="OLX_EXPORTS_DIR=', content)
         self.assertIn("WantedBy=multi-user.target", content)
 
     def test_scripts_executable(self):
@@ -92,6 +104,16 @@ class TestDeploymentFiles(unittest.TestCase):
         self.assertTrue(setup_script.is_file(), "setup_systemd.sh must exist")
         mode = setup_script.stat().st_mode
         self.assertTrue(bool(mode & stat.S_IXUSR), "setup_systemd.sh must be executable")
+
+        verify_script = self.root_dir / "verify.py"
+        self.assertTrue(verify_script.is_file(), "verify.py must exist")
+        mode = verify_script.stat().st_mode
+        self.assertTrue(bool(mode & stat.S_IXUSR), "verify.py must be executable")
+
+        benchmark_script = self.root_dir / "benchmark.py"
+        self.assertTrue(benchmark_script.is_file(), "benchmark.py must exist")
+        mode = benchmark_script.stat().st_mode
+        self.assertTrue(bool(mode & stat.S_IXUSR), "benchmark.py must be executable")
 
     def test_custom_paths_environment_variables(self):
         """Verifies that DB and exports honor environment variables."""

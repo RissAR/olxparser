@@ -178,6 +178,7 @@ def list_exported_files(directories: Optional[List[Union[str, Path]]] = None) ->
 def export_residential(
     db_path: Optional[str] = None,
     output_path: Optional[Union[str, Path]] = None,
+    only_latest_date: bool = False,
 ) -> Dict[str, Any]:
     """
     Exports all residential offers to a CSV file with strictly 23 columns
@@ -193,7 +194,7 @@ def export_residential(
     if target.parent and not target.parent.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
 
-    offers = get_all_residential_offers(db_path=db_path)
+    offers = get_all_residential_offers(db_path=db_path, only_latest_date=only_latest_date)
 
     with open(target, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f, delimiter=",", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
@@ -211,6 +212,7 @@ def export_residential(
 def export_commercial(
     db_path: Optional[str] = None,
     output_path: Optional[Union[str, Path]] = None,
+    only_latest_date: bool = False,
 ) -> Dict[str, Any]:
     """
     Exports all commercial offers to a CSV file with strictly 35 columns
@@ -226,7 +228,7 @@ def export_commercial(
     if target.parent and not target.parent.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
 
-    offers = get_all_commercial_offers(db_path=db_path)
+    offers = get_all_commercial_offers(db_path=db_path, only_latest_date=only_latest_date)
 
     with open(target, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f, delimiter=",", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
@@ -244,11 +246,14 @@ def export_commercial(
 def export_all(
     db_path: Optional[str] = None,
     output_dir: Optional[Union[str, Path]] = None,
+    only_latest_date: bool = False,
+    dated_archive: bool = False,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Exports both residential and commercial datasets.
     If output_dir is given, files are placed in that directory.
     Otherwise, written to the current working directory.
+    If dated_archive is True, also creates dated copies (YYYY-MM-DD).
     """
     effective_dir = output_dir or os.getenv("OLX_EXPORTS_DIR")
     if effective_dir:
@@ -256,16 +261,28 @@ def export_all(
         res_target = out / DEFAULT_RESIDENTIAL_FILENAME
         comm_target = out / DEFAULT_COMMERCIAL_FILENAME
     else:
+        out = Path(".")
         res_target = Path(DEFAULT_RESIDENTIAL_FILENAME)
         comm_target = Path(DEFAULT_COMMERCIAL_FILENAME)
 
-    res_info = export_residential(db_path=db_path, output_path=res_target)
-    comm_info = export_commercial(db_path=db_path, output_path=comm_target)
+    res_info = export_residential(db_path=db_path, output_path=res_target, only_latest_date=only_latest_date)
+    comm_info = export_commercial(db_path=db_path, output_path=comm_target, only_latest_date=only_latest_date)
 
-    return {
+    result: Dict[str, Dict[str, Any]] = {
         "residential": res_info,
         "commercial": comm_info,
     }
+
+    if dated_archive:
+        date_stamp = datetime.now().strftime("%Y-%m-%d")
+        dated_res_target = out / f"olx_residential_kyiv_{date_stamp}.csv"
+        dated_comm_target = out / f"olx_commercial_kyiv_{date_stamp}.csv"
+        dated_res_info = export_residential(db_path=db_path, output_path=dated_res_target, only_latest_date=only_latest_date)
+        dated_comm_info = export_commercial(db_path=db_path, output_path=dated_comm_target, only_latest_date=only_latest_date)
+        result["dated_residential"] = dated_res_info
+        result["dated_commercial"] = dated_comm_info
+
+    return result
 
 
 def verify_csv_against_template(

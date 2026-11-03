@@ -425,22 +425,46 @@ def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-def get_all_residential_offers(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves all residential offers ordered by seen_date DESC, created_at DESC."""
+def get_all_residential_offers(
+    db_path: Optional[str] = None,
+    only_latest_date: bool = False,
+    since_days: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieves all residential offers ordered by seen_date DESC, created_at DESC, with optional recency filtering."""
     init_db(db_path)
     conn = get_db_connection(db_path)
     cols = ", ".join(RESIDENTIAL_COLUMNS)
-    rows = conn.execute(f"SELECT {cols} FROM residential_offers ORDER BY seen_date DESC, created_at DESC").fetchall()
+    where_clauses: List[str] = []
+
+    if only_latest_date:
+        where_clauses.append("seen_date = (SELECT MAX(seen_date) FROM residential_offers WHERE seen_date IS NOT NULL)")
+    elif since_days is not None:
+        where_clauses.append(f"seen_date >= date((SELECT MAX(seen_date) FROM residential_offers WHERE seen_date IS NOT NULL), '-{int(since_days)} days')")
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    rows = conn.execute(f"SELECT {cols} FROM residential_offers {where_sql} ORDER BY seen_date DESC, created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def get_all_commercial_offers(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves all commercial offers ordered by seen_date DESC, created_at DESC."""
+def get_all_commercial_offers(
+    db_path: Optional[str] = None,
+    only_latest_date: bool = False,
+    since_days: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieves all commercial offers ordered by seen_date DESC, created_at DESC, with optional recency filtering."""
     init_db(db_path)
     conn = get_db_connection(db_path)
     cols = ", ".join(COMMERCIAL_COLUMNS)
-    rows = conn.execute(f"SELECT {cols} FROM commercial_offers ORDER BY seen_date DESC, created_at DESC").fetchall()
+    where_clauses: List[str] = []
+
+    if only_latest_date:
+        where_clauses.append("seen_date = (SELECT MAX(seen_date) FROM commercial_offers WHERE seen_date IS NOT NULL)")
+    elif since_days is not None:
+        where_clauses.append(f"seen_date >= date((SELECT MAX(seen_date) FROM commercial_offers WHERE seen_date IS NOT NULL), '-{int(since_days)} days')")
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    rows = conn.execute(f"SELECT {cols} FROM commercial_offers {where_sql} ORDER BY seen_date DESC, created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
