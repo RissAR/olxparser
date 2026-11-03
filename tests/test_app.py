@@ -140,6 +140,16 @@ class TestAppEndpoints(unittest.IsolatedAsyncioTestCase):
         self.scraper.is_running = False
         self.scraper.status = "idle"
 
+    @classmethod
+    def tearDownClass(cls):
+        for fname in ["olx_storage.db", "olx_storage.db-wal", "olx_storage.db-shm", "olx_residential_kyiv.csv", "olx_commercial_kyiv.csv"]:
+            p = Path(fname)
+            if p.exists():
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+
     async def test_index_html_renders(self):
         """GET / returns dashboard HTML with PWA meta and UI controls."""
         resp = await self.client.get("/")
@@ -251,10 +261,19 @@ class TestAppEndpoints(unittest.IsolatedAsyncioTestCase):
 
     async def test_api_download_file_success(self):
         """GET /api/download/{filename} returns CSV file download."""
-        resp = await self.client.get("/api/download/olx_residential_kyiv.csv")
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("text/csv", resp.headers.get("content-type", ""))
-        self.assertIn("attachment", resp.headers.get("content-disposition", ""))
+        test_file = Path("olx_residential_kyiv.csv")
+        created = False
+        if not test_file.exists():
+            test_file.write_text("url,seen_date\n", encoding="utf-8")
+            created = True
+        try:
+            resp = await self.client.get("/api/download/olx_residential_kyiv.csv")
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("text/csv", resp.headers.get("content-type", ""))
+            self.assertIn("attachment", resp.headers.get("content-disposition", ""))
+        finally:
+            if created and test_file.exists():
+                test_file.unlink()
 
     async def test_api_download_file_not_found(self):
         """GET /api/download/{filename} returns 404 for nonexistent file."""

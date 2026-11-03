@@ -102,26 +102,38 @@ class TestStage1Fixes(unittest.TestCase):
 
     def test_api_preview_csv_endpoint(self):
         import asyncio
+        from pathlib import Path
         from app import preview_csv_file
         from fastapi import HTTPException
 
         async def _run():
-            # Test valid file
-            res = await preview_csv_file("olx_residential_kyiv.csv", limit=5)
-            self.assertEqual(res["status"], "success")
-            self.assertEqual(res["filename"], "olx_residential_kyiv.csv")
-            self.assertGreaterEqual(len(res["headers"]), 20)
-            self.assertLessEqual(len(res["rows"]), 5)
+            test_file = Path("olx_residential_kyiv.csv")
+            created = False
+            if not test_file.exists():
+                tpl_path = Path(__file__).resolve().parent.parent / "olx-manual-template.csv"
+                headers = tpl_path.read_text(encoding="utf-8-sig").splitlines()[0] if tpl_path.exists() else "col1,col2"
+                test_file.write_text(f"{headers}\nrow1\n", encoding="utf-8-sig")
+                created = True
+            try:
+                # Test valid file
+                res = await preview_csv_file("olx_residential_kyiv.csv", limit=5)
+                self.assertEqual(res["status"], "success")
+                self.assertEqual(res["filename"], "olx_residential_kyiv.csv")
+                self.assertGreaterEqual(len(res["headers"]), 20)
+                self.assertLessEqual(len(res["rows"]), 5)
 
-            # Test invalid traversal attempt
-            with self.assertRaises(HTTPException) as cm:
-                await preview_csv_file("../secret.csv")
-            self.assertEqual(cm.exception.status_code, 400)
+                # Test invalid traversal attempt
+                with self.assertRaises(HTTPException) as cm:
+                    await preview_csv_file("../secret.csv")
+                self.assertEqual(cm.exception.status_code, 400)
 
-            # Test non-existent file
-            with self.assertRaises(HTTPException) as cm:
-                await preview_csv_file("non_existent_file_12345.csv")
-            self.assertEqual(cm.exception.status_code, 404)
+                # Test non-existent file
+                with self.assertRaises(HTTPException) as cm:
+                    await preview_csv_file("non_existent_file_12345.csv")
+                self.assertEqual(cm.exception.status_code, 404)
+            finally:
+                if created and test_file.exists():
+                    test_file.unlink()
 
         asyncio.run(_run())
 
@@ -172,10 +184,13 @@ class TestStage1Fixes(unittest.TestCase):
         self.assertFalse(is_valid_rental_offer(offer2, "commercial"))
 
     def test_get_stats_without_repeated_ddl(self):
-        from database import get_stats
-        stats = get_stats()
-        self.assertIn("residential_count", stats)
-        self.assertIn("commercial_count", stats)
+        import tempfile
+        from database import get_stats, init_db
+        with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+            init_db(tmp.name)
+            stats = get_stats(tmp.name)
+            self.assertIn("residential_count", stats)
+            self.assertIn("commercial_count", stats)
 
 
 if __name__ == "__main__":
