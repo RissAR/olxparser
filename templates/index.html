@@ -67,9 +67,9 @@
         </div>
         <div>
           <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-            OLX Parser <span class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">Kyiv Real Estate</span>
+            Multi-Source Parser <span class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">Kyiv Real Estate</span>
           </h1>
-          <p class="text-xs text-slate-400">Парсер оренди житлової та комерційної нерухомості Києва (10 районів)</p>
+          <p class="text-xs text-slate-400">Парсер оренди житлової та комерційної нерухомості Києва (OLX &bull; Rieltor.ua &bull; LUN.ua)</p>
         </div>
       </div>
 
@@ -105,7 +105,10 @@
         </div>
         <div class="mt-2 flex items-baseline gap-2">
           <span id="kpiResidentialCount" class="text-2xl font-bold text-white">0</span>
-          <span class="text-xs text-slate-500">оголошень (23 колонки)</span>
+          <span class="text-xs text-slate-500">оголошень</span>
+        </div>
+        <div id="kpiResidentialBreakdown" class="text-[10px] text-slate-400 mt-1 truncate">
+          OLX: <span id="kpiResOlx">0</span> &bull; Rieltor: <span id="kpiResRieltor">0</span> &bull; LUN: <span id="kpiResLun">0</span>
         </div>
       </div>
 
@@ -118,7 +121,10 @@
         </div>
         <div class="mt-2 flex items-baseline gap-2">
           <span id="kpiCommercialCount" class="text-2xl font-bold text-white">0</span>
-          <span class="text-xs text-slate-500">оголошень (35 колонок)</span>
+          <span class="text-xs text-slate-500">оголошень</span>
+        </div>
+        <div id="kpiCommercialBreakdown" class="text-[10px] text-slate-400 mt-1 truncate">
+          OLX: <span id="kpiCommOlx">0</span> &bull; Rieltor: <span id="kpiCommRieltor">0</span> &bull; LUN: <span id="kpiCommLun">0</span>
         </div>
       </div>
 
@@ -162,6 +168,28 @@
               </svg>
               Панель керування парсером
             </h2>
+          </div>
+
+          <!-- Source Selection (Multi-Source) -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold text-slate-300">Джерела даних</label>
+              <button type="button" onclick="toggleAllSources()" class="text-[11px] text-blue-400 hover:text-blue-300 transition">Всі / Очистити</button>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="cursor-pointer border border-slate-700 bg-slate-950/60 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-600/10 rounded-lg p-2 text-center text-xs font-medium transition flex items-center justify-center gap-1.5">
+                <input type="checkbox" name="source" value="olx" checked class="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0">
+                <span>OLX.ua</span>
+              </label>
+              <label class="cursor-pointer border border-slate-700 bg-slate-950/60 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-600/10 rounded-lg p-2 text-center text-xs font-medium transition flex items-center justify-center gap-1.5">
+                <input type="checkbox" name="source" value="rieltor" checked class="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0">
+                <span>Rieltor.ua</span>
+              </label>
+              <label class="cursor-pointer border border-slate-700 bg-slate-950/60 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-600/10 rounded-lg p-2 text-center text-xs font-medium transition flex items-center justify-center gap-1.5">
+                <input type="checkbox" name="source" value="lun" checked class="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0">
+                <span>LUN.ua</span>
+              </label>
+            </div>
           </div>
 
           <!-- Category Selection -->
@@ -409,6 +437,48 @@
             </div>
           </div>
 
+          <!-- Multi-Source Realtime Status Breakdown -->
+          <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <span>Джерела даних (Стан підпроцесів)</span>
+              <span id="activeSourceBadge" class="text-[10px] px-2 py-0.5 rounded font-mono bg-blue-500/20 text-blue-400">Всі джерела</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div id="sourceCardOlx" class="bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="font-bold text-slate-300">OLX.ua</span>
+                  <span id="sourceStatusOlx" class="text-[10px] text-slate-500 font-mono">очікування</span>
+                </div>
+                <div class="mt-1 flex items-baseline justify-between text-xs">
+                  <span class="text-slate-500">Збережено:</span>
+                  <span id="sourceCountOlx" class="font-semibold text-white font-mono">0</span>
+                </div>
+              </div>
+
+              <div id="sourceCardRieltor" class="bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="font-bold text-slate-300">Rieltor.ua</span>
+                  <span id="sourceStatusRieltor" class="text-[10px] text-slate-500 font-mono">очікування</span>
+                </div>
+                <div class="mt-1 flex items-baseline justify-between text-xs">
+                  <span class="text-slate-500">Збережено:</span>
+                  <span id="sourceCountRieltor" class="font-semibold text-white font-mono">0</span>
+                </div>
+              </div>
+
+              <div id="sourceCardLun" class="bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="font-bold text-slate-300">LUN.ua</span>
+                  <span id="sourceStatusLun" class="text-[10px] text-slate-500 font-mono">очікування</span>
+                </div>
+                <div class="mt-1 flex items-baseline justify-between text-xs">
+                  <span class="text-slate-500">Збережено:</span>
+                  <span id="sourceCountLun" class="font-semibold text-white font-mono">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Current Active Slice Info -->
           <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-1">
             <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Поточний зріз пошуку</div>
@@ -591,6 +661,12 @@
       }
     }
 
+    function toggleAllSources() {
+      const cbs = document.querySelectorAll('input[name="source"]');
+      const allChecked = Array.from(cbs).every(cb => cb.checked);
+      cbs.forEach(cb => cb.checked = !allChecked);
+    }
+
     function humanizeSlice(str) {
       if (!str || str === 'Немає активного зрізу') return 'Немає активного зрізу';
       let s = str;
@@ -756,6 +832,13 @@
     }
 
     async function startScrape() {
+      const sourceCheckboxes = document.querySelectorAll('input[name="source"]:checked');
+      const sources = Array.from(sourceCheckboxes).map(cb => cb.value);
+      if (sources.length === 0) {
+        showToast('Оберіть хоча б одне джерело для парсингу!', 'error');
+        return;
+      }
+
       const category = document.querySelector('input[name="category"]:checked')?.value || 'all';
       const maxOffersVal = document.getElementById('maxOffersInput').value;
       const maxSlicesVal = document.getElementById('maxSlicesInput').value;
@@ -764,6 +847,7 @@
       const proxyUrl = getConstructedProxyUrl();
 
       const payload = {
+        sources: sources,
         category: category,
         auto_export: autoExport,
         only_latest_date: onlyLatestDate
@@ -897,6 +981,61 @@
         document.getElementById('liveErrors').textContent = (data.errors_count || 0).toLocaleString('uk-UA');
         document.getElementById('liveSlice').textContent = humanizeSlice(data.current_slice);
 
+        // Update Multi-Source sub-processes
+        const activeSource = data.active_source;
+        const activeBadge = document.getElementById('activeSourceBadge');
+        if (activeBadge) {
+          if (activeSource) {
+            activeBadge.className = 'text-[10px] px-2 py-0.5 rounded font-mono bg-blue-500/20 text-blue-400 border border-blue-500/30 animate-pulse';
+            activeBadge.textContent = 'Активно: ' + activeSource.toUpperCase();
+          } else if (isRunning) {
+            activeBadge.className = 'text-[10px] px-2 py-0.5 rounded font-mono bg-emerald-500/20 text-emerald-400';
+            activeBadge.textContent = 'Збір триває';
+          } else {
+            activeBadge.className = 'text-[10px] px-2 py-0.5 rounded font-mono bg-slate-800 text-slate-400';
+            activeBadge.textContent = 'Очікування';
+          }
+        }
+
+        const details = data.sources_detail || {};
+        const sourcesList = ['olx', 'rieltor', 'lun'];
+        sourcesList.forEach(s => {
+          const sCap = s.charAt(0).toUpperCase() + s.slice(1);
+          const stEl = document.getElementById('sourceStatus' + sCap);
+          const countEl = document.getElementById('sourceCount' + sCap);
+          const cardEl = document.getElementById('sourceCard' + sCap);
+          const sData = details[s] || {};
+
+          if (countEl) {
+            countEl.textContent = (sData.processed_count || 0).toLocaleString('uk-UA');
+          }
+          if (stEl) {
+            const subRunning = sData.is_running || (activeSource === s);
+            const subStatus = sData.status || (subRunning ? 'running' : 'idle');
+            if (subRunning) {
+              stEl.className = 'text-[10px] text-blue-400 font-mono font-semibold animate-pulse';
+              stEl.textContent = 'парсинг...';
+              if (cardEl) cardEl.className = 'bg-slate-900/90 border border-blue-500/50 p-2.5 rounded-lg transition-colors';
+            } else if (subStatus === 'completed') {
+              stEl.className = 'text-[10px] text-emerald-400 font-mono';
+              stEl.textContent = 'готово';
+              if (cardEl) cardEl.className = 'bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg';
+            } else if (subStatus === 'stopped') {
+              stEl.className = 'text-[10px] text-amber-400 font-mono';
+              stEl.textContent = 'зупинено';
+              if (cardEl) cardEl.className = 'bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg';
+            } else if (subStatus === 'failed') {
+              stEl.className = 'text-[10px] text-rose-400 font-mono';
+              stEl.textContent = 'помилка';
+              if (cardEl) cardEl.className = 'bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg';
+            } else {
+              stEl.className = 'text-[10px] text-slate-500 font-mono';
+              stEl.textContent = 'очікування';
+              if (cardEl) cardEl.className = 'bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg';
+            }
+          }
+        });
+
         // Session timer
         if (data.started_at) {
           const startStr = typeof data.started_at === 'string' ? data.started_at.replace('T', ' ') : data.started_at;
@@ -912,10 +1051,26 @@
           document.getElementById('sessionTimer').textContent = '--:--:--';
         }
 
-        // KPI Counts
+        // KPI Counts & Breakdown
         if (data.db_stats) {
           document.getElementById('kpiResidentialCount').textContent = (data.db_stats.residential_count || 0).toLocaleString('uk-UA');
           document.getElementById('kpiCommercialCount').textContent = (data.db_stats.commercial_count || 0).toLocaleString('uk-UA');
+
+          const resBySource = data.db_stats.residential_by_source || {};
+          const commBySource = data.db_stats.commercial_by_source || {};
+          const elResOlx = document.getElementById('kpiResOlx');
+          const elResRieltor = document.getElementById('kpiResRieltor');
+          const elResLun = document.getElementById('kpiResLun');
+          if (elResOlx) elResOlx.textContent = (resBySource['olx'] || 0).toLocaleString('uk-UA');
+          if (elResRieltor) elResRieltor.textContent = (resBySource['rieltor'] || 0).toLocaleString('uk-UA');
+          if (elResLun) elResLun.textContent = (resBySource['lun'] || 0).toLocaleString('uk-UA');
+
+          const elCommOlx = document.getElementById('kpiCommOlx');
+          const elCommRieltor = document.getElementById('kpiCommRieltor');
+          const elCommLun = document.getElementById('kpiCommLun');
+          if (elCommOlx) elCommOlx.textContent = (commBySource['olx'] || 0).toLocaleString('uk-UA');
+          if (elCommRieltor) elCommRieltor.textContent = (commBySource['rieltor'] || 0).toLocaleString('uk-UA');
+          if (elCommLun) elCommLun.textContent = (commBySource['lun'] || 0).toLocaleString('uk-UA');
         }
         document.getElementById('kpiProcessedCount').textContent = (data.processed_count || 0).toLocaleString('uk-UA');
         document.getElementById('kpiTotalFound').textContent = (data.total_found || 0).toLocaleString('uk-UA');
@@ -995,10 +1150,23 @@
         }
 
         tbody.innerHTML = files.map(f => {
+          const isMaster = f.filename.includes('unified_kyiv_real_estate');
+          const isUnifiedRes = f.filename.includes('unified_residential');
+          const isUnifiedComm = f.filename.includes('unified_commercial');
           const isComm = f.filename.includes('commercial');
-          const tplBadge = isComm
-            ? '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans">Комерційна (35 кол.)</span>'
-            : '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans">Житлова (23 кол.)</span>';
+
+          let tplBadge = '';
+          if (isMaster) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 text-[11px] font-sans font-medium">Вся база (Мульти)</span>';
+          } else if (isUnifiedRes) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans font-medium">Житлова (Мульти)</span>';
+          } else if (isUnifiedComm) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans font-medium">Комерційна (Мульти)</span>';
+          } else if (isComm) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans">Комерційна (35 кол.)</span>';
+          } else {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans">Житлова (23 кол.)</span>';
+          }
 
           return `
             <tr class="hover:bg-slate-800/40 transition">

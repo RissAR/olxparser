@@ -35,8 +35,10 @@ from exporter import (
     export_all,
     export_commercial,
     export_residential,
+    export_unified,
     list_exported_files,
 )
+from orchestrator import MultiSourceOrchestrator, get_orchestrator_instance
 from scraper import OLXScraper, get_scraper_instance, test_proxy_connection
 
 # Setup logging
@@ -67,6 +69,7 @@ _current_scrape_task: Optional[asyncio.Task] = None
 
 
 async def run_scraping_workflow(
+    sources: Optional[List[str]] = None,
     category: str = "all",
     max_offers: Optional[int] = None,
     max_slices: Optional[int] = None,
@@ -75,12 +78,13 @@ async def run_scraping_workflow(
     proxy: Optional[str] = None,
 ) -> None:
     """
-    Executes the scraping workflow in the background.
+    Executes the scraping workflow in the background across configured sources (OLX, Rieltor, LUN).
     Automatically runs CSV exporter upon successful completion if auto_export is True.
     """
-    scraper = get_scraper_instance()
+    orchestrator = get_orchestrator_instance()
     logger.info(
-        "Starting background scrape workflow: category=%s, max_offers=%s, max_slices=%s, auto_export=%s, only_latest_date=%s, proxy=%s",
+        "Starting background multi-source scrape workflow: sources=%s, category=%s, max_offers=%s, max_slices=%s, auto_export=%s, only_latest_date=%s, proxy=%s",
+        sources,
         category,
         max_offers,
         max_slices,
@@ -89,33 +93,44 @@ async def run_scraping_workflow(
         bool(proxy),
     )
     try:
-        await scraper.run(
+        await orchestrator.run(
+            sources=sources,
             category=category,
             max_offers=max_offers,
             max_slices=max_slices,
             proxy=proxy,
         )
-        if auto_export and scraper.status in ("completed", "stopped"):
-            logger.info("Scraper finished (%s). Running automatic CSV export...", scraper.status)
+        if auto_export and orchestrator.status in ("completed", "stopped"):
+            logger.info("Scraping finished (%s). Running automatic CSV exports...", orchestrator.status)
             export_all(only_latest_date=only_latest_date, dated_archive=True)
-            logger.info("Automatic CSV export completed successfully.")
+            try:
+                export_unified(only_latest_date=only_latest_date, dated_archive=True)
+            except Exception as ex_err:
+                logger.warning("Error generating unified multi-source exports: %s", ex_err)
+            logger.info("Automatic CSV exports completed successfully.")
     except asyncio.CancelledError:
         logger.info("Scrape task was cancelled.")
-        scraper.stop()
+        orchestrator.stop()
     except Exception as exc:
         logger.exception("Error occurred in background scrape task: %s", exc)
 
 
 async def scheduled_weekly_job() -> None:
     """Triggered weekly by APScheduler."""
-    scraper = get_scraper_instance()
-    if scraper.is_running:
+    orchestrator = get_orchestrator_instance()
+    olx_scraper = get_scraper_instance()
+    if orchestrator.is_running or olx_scraper.is_running:
         logger.warning("Weekly scheduled scrape skipped: Scraper is already running.")
         return
-    logger.info("APScheduler executing weekly full scrape & export job...")
+    logger.info("APScheduler executing weekly full multi-source scrape & export job...")
     global _current_scrape_task
     _current_scrape_task = asyncio.create_task(
-        run_scraping_workflow(category="all", auto_export=True, only_latest_date=True)
+        run_scraping_workflow(
+            sources=["olx", "rieltor", "lun"],
+            category="all",
+            auto_export=True,
+            only_latest_date=True,
+        )
     )
 
 
@@ -123,7 +138,7 @@ async def scheduled_weekly_job() -> None:
 async def lifespan(app: FastAPI):
     """Application lifespan manager: starts scheduler and DB on boot, cleans up on exit."""
     # Startup
-    logger.info("Initializing OLX Real Estate Parser application...")
+    logger.info("Initializing Kyiv Real Estate Multi-Source Parser application...")
     init_db()
 
     # Configure weekly job: Every Monday at 03:00 (Kyiv time)
@@ -141,15 +156,20 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down application...")
-    scraper = get_scraper_instance()
-    if scraper.is_running:
-        logger.info("Stopping active scraper on server shutdown...")
-        scraper.stop()
-        if _current_scrape_task and not _current_scrape_task.done():
-            try:
-                await asyncio.wait_for(asyncio.shield(_current_scrape_task), timeout=5.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
-                pass
+    orchestrator = get_orchestrator_instance()
+    olx_scraper = get_scraper_instance()
+    if orchestrator.is_running:
+        logger.info("Stopping active orchestrator on server shutdown...")
+        orchestrator.stop()
+    if olx_scraper.is_running:
+        logger.info("Stopping active OLX scraper on server shutdown...")
+        olx_scraper.stop()
+
+    if _current_scrape_task and not _current_scrape_task.done():
+        try:
+            await asyncio.wait_for(asyncio.shield(_current_scrape_task), timeout=5.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+            pass
 
     if scheduler.running:
         scheduler.shutdown(wait=False)
@@ -158,9 +178,9 @@ async def lifespan(app: FastAPI):
 
 # FastAPI application instance
 app = FastAPI(
-    title="OLX Kyiv Real Estate Parser",
-    description="Web UI and REST API for OLX Kyiv rental housing and commercial real estate monitoring.",
-    version="1.0.0",
+    title="Kyiv Real Estate Multi-Source Parser",
+    description="Web UI and REST API for multi-source (OLX, Rieltor, LUN) Kyiv rental housing and commercial real estate monitoring.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -175,6 +195,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # Request & Response Schemas
 # -----------------------------------------------------------------------------
 class ScrapeRequest(BaseModel):
+    sources: Optional[List[str]] = Field(default=None)
     category: str = Field(default="all", pattern="^(all|residential|commercial)$")
     max_offers: Optional[int] = Field(default=None, ge=1)
     max_slices: Optional[int] = Field(default=None, ge=1)
@@ -185,7 +206,9 @@ class ScrapeRequest(BaseModel):
 
 class ExportRequest(BaseModel):
     category: str = Field(default="all", pattern="^(all|residential|commercial)$")
+    source: Optional[str] = Field(default=None, pattern="^(olx|rieltor|lun|all)?$")
     only_latest_date: bool = True
+    include_source: bool = False
 
 
 class ProxyTestRequest(BaseModel):
@@ -202,7 +225,7 @@ async def index_view(request: Request):
         request=request,
         name="index.html",
         context={
-            "title": "OLX Kyiv Real Estate Parser",
+            "title": "Kyiv Real Estate Multi-Source Parser",
         },
     )
 
@@ -214,7 +237,7 @@ async def index_view(request: Request):
 async def test_proxy_endpoint(req: ProxyTestRequest):
     """
     POST /api/proxy/test
-    Tests connection to OLX API through the specified proxy without starting a scrape.
+    Tests connection through the specified proxy without starting a scrape.
     """
     if not req.proxy or not req.proxy.strip():
         raise HTTPException(
@@ -229,10 +252,11 @@ async def test_proxy_endpoint(req: ProxyTestRequest):
 async def start_scraping(req: ScrapeRequest):
     """
     POST /api/scrape/start
-    Starts a background scraping task for residential, commercial, or both categories.
+    Starts a background scraping task across selected sources for residential, commercial, or both categories.
     """
-    scraper = get_scraper_instance()
-    if scraper.is_running:
+    orchestrator = get_orchestrator_instance()
+    olx_scraper = get_scraper_instance()
+    if orchestrator.is_running or olx_scraper.is_running:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Scraper is already running a session.",
@@ -241,6 +265,7 @@ async def start_scraping(req: ScrapeRequest):
     global _current_scrape_task
     _current_scrape_task = asyncio.create_task(
         run_scraping_workflow(
+            sources=req.sources,
             category=req.category,
             max_offers=req.max_offers,
             max_slices=req.max_slices,
@@ -252,6 +277,7 @@ async def start_scraping(req: ScrapeRequest):
 
     return {
         "status": "started",
+        "sources": req.sources or ["olx", "rieltor", "lun"],
         "category": req.category,
         "max_offers": req.max_offers,
         "max_slices": req.max_slices,
@@ -265,16 +291,18 @@ async def start_scraping(req: ScrapeRequest):
 async def stop_scraping():
     """
     POST /api/scrape/stop
-    Sends graceful stop signal to the active scraper task.
+    Sends graceful stop signal to active scraper tasks across all sources.
     """
-    scraper = get_scraper_instance()
-    if not scraper.is_running:
+    orchestrator = get_orchestrator_instance()
+    olx_scraper = get_scraper_instance()
+    if not orchestrator.is_running and not olx_scraper.is_running:
         return {
             "status": "not_running",
             "message": "Scraper is not running.",
         }
 
-    scraper.stop()
+    orchestrator.stop()
+    olx_scraper.stop()
     return {
         "status": "stopping",
         "message": "Stop signal sent to scraper.",
@@ -286,10 +314,15 @@ async def get_status():
     """
     GET /api/status
     Returns realtime state (idle/running/stopping/completed/failed), counters,
-    database metrics, and scheduler next run information.
+    multi-source details, database metrics, and scheduler next run information.
     """
-    scraper = get_scraper_instance()
-    st = scraper.get_status()
+    orchestrator = get_orchestrator_instance()
+    olx_scraper = get_scraper_instance()
+
+    if orchestrator.is_running or not olx_scraper.is_running:
+        st = orchestrator.get_status()
+    else:
+        st = olx_scraper.get_status()
 
     # Get DB statistics
     try:
@@ -428,24 +461,36 @@ async def trigger_export(req: Optional[ExportRequest] = None):
     """
     cat = req.category if req else "all"
     only_latest = req.only_latest_date if req else True
+    source_filter = (req.source if req and req.source and req.source != "all" else None)
+    include_source = req.include_source if req else False
     exported_results: List[Dict[str, Any]] = []
 
     try:
         if cat == "residential":
-            info = export_residential(only_latest_date=only_latest)
+            info = export_residential(only_latest_date=only_latest, source=source_filter, include_source=include_source)
             exported_results.append(info)
         elif cat == "commercial":
-            info = export_commercial(only_latest_date=only_latest)
+            info = export_commercial(only_latest_date=only_latest, source=source_filter, include_source=include_source)
             exported_results.append(info)
         else:
-            res = export_all(only_latest_date=only_latest, dated_archive=True)
+            res = export_all(only_latest_date=only_latest, source=source_filter, dated_archive=True)
             for k in ("residential", "commercial", "dated_residential", "dated_commercial"):
                 if k in res:
                     exported_results.append(res[k])
 
+            # Also generate unified multi-source CSV files if exporting all
+            try:
+                res_unified = export_unified(only_latest_date=only_latest, dated_archive=True)
+                for k in ("residential", "commercial", "master"):
+                    if k in res_unified:
+                        exported_results.append(res_unified[k])
+            except Exception as unif_err:
+                logger.warning("Error generating unified CSV files during export: %s", unif_err)
+
         return {
             "status": "success",
             "category": cat,
+            "source": source_filter or "all",
             "only_latest_date": only_latest,
             "exported_files": exported_results,
         }
