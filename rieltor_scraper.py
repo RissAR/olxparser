@@ -579,6 +579,10 @@ class RieltorScraper:
             self.session_id, category
         )
 
+        # Quotas for balanced category collection when category="all" and max_offers is set
+        res_quota = max(1, max_offers // 2) if (category == "all" and max_offers is not None) else None
+        comm_quota = (max_offers - res_quota) if (category == "all" and max_offers is not None) else None
+
         slices = self.generate_slices(category)
         if max_slices is not None:
             slices = slices[:max_slices]
@@ -590,10 +594,19 @@ class RieltorScraper:
                 if self.stop_event.is_set():
                     break
 
+                if category == "all" and max_offers is not None:
+                    if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                        break
+                    if current_slice.category_type == "residential" and self.processed_residential >= res_quota:
+                        continue
+                    if current_slice.category_type == "commercial" and self.processed_commercial >= comm_quota:
+                        continue
+
                 self.current_slice_label = current_slice.label
                 logger.info("Processing Slice #%s: %s", s_idx, current_slice.label)
 
                 page = 1
+                seen_ids_in_slice = set()
                 while not self.stop_event.is_set():
                     page_url = current_slice.get_url(page)
                     html_content = await self.client.request_html(page_url, self.stop_event)
@@ -606,9 +619,8 @@ class RieltorScraper:
                         # Reached the end of this slice
                         break
 
-                    self.total_found += len(card_snippets)
-
                     batch_offers: List[Tuple[Dict[str, Any], str]] = []
+                    new_in_page = 0
                     for c_html in card_snippets:
                         try:
                             parsed_tuple = self.parser.parse_card(
@@ -618,11 +630,42 @@ class RieltorScraper:
                             )
                             if parsed_tuple:
                                 norm_dict, raw_dict = parsed_tuple
+                                cid = str(raw_dict.get("id") or norm_dict.get("url") or "")
+                                if cid and cid in seen_ids_in_slice:
+                                    continue
+                                if cid:
+                                    seen_ids_in_slice.add(cid)
+                                new_in_page += 1
                                 raw_json = json.dumps(raw_dict, ensure_ascii=False)
                                 batch_offers.append((norm_dict, raw_json))
                         except Exception as parse_err:
                             self.errors_count += 1
                             logger.warning("Error parsing Rieltor card: %s", parse_err)
+
+                    if new_in_page == 0:
+                        break
+
+                    self.total_found += new_in_page
+
+                    # Cap batch if max_offers or category quota is set
+                    if current_slice.category_type == "residential":
+                        if category == "all" and res_quota is not None:
+                            rem = max(0, res_quota - self.processed_residential)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
+                        elif max_offers is not None:
+                            rem = max(0, max_offers - self.processed_count)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
+                    else:
+                        if category == "all" and comm_quota is not None:
+                            rem = max(0, comm_quota - self.processed_commercial)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
+                        elif max_offers is not None:
+                            rem = max(0, max_offers - self.processed_count)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
 
                     # Persist batch into database
                     if batch_offers:
@@ -669,14 +712,25 @@ class RieltorScraper:
                             pass
 
                     # Check max_offers limit
-                    if max_offers is not None and self.processed_count >= max_offers:
+                    if category == "all" and max_offers is not None:
+                        if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                            logger.info("Reached target max_offers limit: %s", max_offers)
+                            break
+                        if current_slice.category_type == "residential" and self.processed_residential >= res_quota:
+                            break
+                        if current_slice.category_type == "commercial" and self.processed_commercial >= comm_quota:
+                            break
+                    elif max_offers is not None and self.processed_count >= max_offers:
                         logger.info("Reached target max_offers limit: %s", max_offers)
                         break
 
                     page += 1
 
                 slices_processed += 1
-                if max_offers is not None and self.processed_count >= max_offers:
+                if category == "all" and max_offers is not None:
+                    if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                        break
+                elif max_offers is not None and self.processed_count >= max_offers:
                     break
 
             if self.stop_event.is_set():

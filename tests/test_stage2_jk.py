@@ -110,7 +110,7 @@ class TestStage2ResidentialComplex(unittest.TestCase):
             self.assertEqual(name, exp_name)
 
     def test_extract_residential_complex_anti_hallucination(self):
-        """Verifies that non-distinct words or metro stations do not cause hallucinations."""
+        """Verifies that non-distinct words, proximity landmarks, or metro stations do not cause hallucinations."""
         negative_cases = [
             "Квартира поруч з чудовою зоною відпочинку біля озера",
             "Станція метро Славутич 5 хвилин пішки",
@@ -118,6 +118,10 @@ class TestStage2ResidentialComplex(unittest.TestCase):
             "Оренда квартири на вул. Володимирська, 15",
             "Спортивна територія для прогулянок з дітьми",
             "У кімнаті гарний диван та велике ліжко",
+            "Оренда 1 кім кв. Резервне живлення, поряд Паркленд,Скайлен,Васильківська",
+            "Поруч ЖК Parkland, ЖК Skyland. До метро Васильківська 20 хвилин пішки",
+            "Оренда офісу 46м2 поруч ЖК Кришталеві Джерела, Генератор Є",
+            "Квартира біля ТРЦ Республіка, метро Теремки",
         ]
         for text in negative_cases:
             res = extract_residential_complex(text)

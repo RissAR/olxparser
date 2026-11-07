@@ -21,7 +21,7 @@ import os
 import re
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from database import init_db
+from database import DEFAULT_DB_PATH, init_db
 from lun_scraper import LunScraper
 from rieltor_scraper import RieltorScraper
 from scraper import OLXScraper, get_scraper_instance
@@ -46,8 +46,8 @@ class MultiSourceOrchestrator:
     Coordinates and monitors multi-source scraping runs across OLX, Rieltor.ua, and LUN.ua.
     """
 
-    def __init__(self, db_path: str = "kyiv_rent.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or DEFAULT_DB_PATH
         self.olx_scraper = get_scraper_instance(db_path=self.db_path)
         self.rieltor_scraper = RieltorScraper(db_path=self.db_path)
         self.lun_scraper = LunScraper(db_path=self.db_path)
@@ -283,5 +283,5 @@ def get_orchestrator_instance(db_path: Optional[str] = None) -> MultiSourceOrche
     """Returns the singleton instance of MultiSourceOrchestrator."""
     global _orchestrator_instance
     if _orchestrator_instance is None:
-        _orchestrator_instance = MultiSourceOrchestrator(db_path=db_path or "kyiv_rent.db")
+        _orchestrator_instance = MultiSourceOrchestrator(db_path=db_path or DEFAULT_DB_PATH)
     return _orchestrator_instance

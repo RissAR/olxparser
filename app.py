@@ -481,7 +481,7 @@ async def trigger_export(req: Optional[ExportRequest] = None):
             # Also generate unified multi-source CSV files if exporting all
             try:
                 res_unified = export_unified(only_latest_date=only_latest, dated_archive=True)
-                for k in ("residential", "commercial", "master"):
+                for k in ("unified_residential", "unified_commercial", "unified_master", "dated_unified_master"):
                     if k in res_unified:
                         exported_results.append(res_unified[k])
             except Exception as unif_err:
@@ -509,8 +509,9 @@ async def cron_trigger():
     Trigger endpoint for Linux system crontab on VDS.
     Starts background scrape for all categories with auto-export.
     """
+    orchestrator = get_orchestrator_instance()
     scraper = get_scraper_instance()
-    if scraper.is_running:
+    if orchestrator.is_running or scraper.is_running:
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={

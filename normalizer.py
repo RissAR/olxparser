@@ -172,6 +172,13 @@ STREET_SYNONYMS: Dict[str, str] = {
     "верхогляда": "вулиця Драгомирова Михайла",
     "андрія верхогляда": "вулиця Драгомирова Михайла",
     "драгомирова": "вулиця Драгомирова Михайла",
+    "самуїла кішки": "вулиця Конєва Маршала",
+    "самійла кішки": "вулиця Конєва Маршала",
+    "кішки самуїла": "вулиця Конєва Маршала",
+    "кішки самійла": "вулиця Конєва Маршала",
+    "маршала конєва": "вулиця Конєва Маршала",
+    "конєва маршала": "вулиця Конєва Маршала",
+    "конєва": "вулиця Конєва Маршала",
 }
 
 # Ambiguous single-word street names that cause hallucinations without explicit street indicators
@@ -951,6 +958,14 @@ JK_STOP_WORDS_RE = re.compile(
 )
 
 
+JK_PROXIMITY_RE = re.compile(
+    r"\b(?:поряд(?:\s+з|\s+із)?|поруч(?:\s+з|\s+із)?|біля|неподалік(?:\s+від)?|поблизу|навпроти|"
+    r"рядом(?:\s+с|\s+со)?|возле|около|вблизи|напротив|вид\s+на|панорама\s+на|до|від|от|"
+    r"трц|тц|тк)\s*(?:жк|житлов\w*\s+комплекс\w*|жилой\s+комплекс\w*|ж/к)?\s*[:\-–—]?\s*$",
+    re.IGNORECASE,
+)
+
+
 def extract_residential_complex(text: str) -> Optional[Tuple[str, Optional[str]]]:
     """
     Detects residential complex (ЖК) in text.
@@ -959,6 +974,8 @@ def extract_residential_complex(text: str) -> Optional[Tuple[str, Optional[str]]
     Priority:
     1. Check against KYIV_RESIDENTIAL_COMPLEXES aliases:
        - Match longer aliases first.
+       - Reject matches preceded by metro/shopping-center/proximity indicators
+         (e.g. 'поруч ЖК Parkland', 'поряд Паркленд', 'біля ТРЦ Республіка').
        - If alias is distinct, can match with or without explicit 'ЖК' keyword.
        - If alias is not distinct (street name collision), require explicit 'ЖК' keyword.
     2. Fallback to generic regex: 'ЖК <Name>' / 'житловий комплекс <Name>'
@@ -973,10 +990,9 @@ def extract_residential_complex(text: str) -> Optional[Tuple[str, Optional[str]]
     # 1. First check dictionary aliases (sorted by length DESC)
     for alias, canonical, district, distinct in _COMPILED_JK_ALIASES:
         pattern = r"\b" + re.escape(alias) + r"\b"
-        m = re.search(pattern, lower)
-        if m:
+        for m in re.finditer(pattern, lower):
             start_pos = m.start()
-            prefix_ctx = lower[max(0, start_pos - 35) : start_pos]
+            prefix_ctx = lower[max(0, start_pos - 45) : start_pos]
             suffix_ctx = lower[m.end() : min(len(lower), m.end() + 25)]
 
             # Reject if preceded or followed by metro station indicator
@@ -988,6 +1004,18 @@ def extract_residential_complex(text: str) -> Optional[Tuple[str, Optional[str]]
             if re.search(r"^\s*(?:метро|станці[яєїі])\b", suffix_ctx):
                 continue
 
+            # Reject if preceded by proximity prepositions or shopping center markers
+            if JK_PROXIMITY_RE.search(prefix_ctx):
+                continue
+
+            # Also check if inside a comma-separated list of nearby landmarks (e.g. 'поряд Паркленд, Скайлен')
+            wider_prefix = lower[max(0, start_pos - 80) : start_pos]
+            if re.search(
+                r"\b(?:поряд|поруч|біля|неподалік|поблизу|навпроти|рядом|возле|около|напротив)\b[^.!?\n;:]*,\s*(?:жк\s*)?$",
+                wider_prefix,
+            ):
+                continue
+
             # If distinct, alias alone is sufficient
             if distinct:
                 return canonical, district
@@ -997,8 +1025,11 @@ def extract_residential_complex(text: str) -> Optional[Tuple[str, Optional[str]]
                 return canonical, district
 
     # 2. Quoted generic ЖК: e.g. ЖК "Назва" or житловий комплекс «Назва»
-    m_quoted = JK_QUOTED_RE.search(clean)
-    if m_quoted:
+    for m_quoted in JK_QUOTED_RE.finditer(clean):
+        q_start = m_quoted.start()
+        q_prefix = lower[max(0, q_start - 35) : q_start]
+        if JK_PROXIMITY_RE.search(q_prefix):
+            continue
         name = m_quoted.group(1).strip()
         name = re.sub(r"^[«\"“'’\s]+|[»\"”'’\s]+$", "", name)
         if len(name) >= 2 and not JK_STOP_WORDS_RE.match(name):
@@ -2682,6 +2713,17 @@ class RieltorNormalizer:
             fallback_jk=True,
         )
 
+        # Check chips for explicit JK chip if house is missing and street not yet a JK
+        if not house and not street.startswith("ЖК "):
+            for chip in chips:
+                if "жк" in chip.lower():
+                    jk_clean = re.sub(r"^(?:пр[еє]міум\s+|відеотур\s+)", "", chip, flags=re.IGNORECASE).strip()
+                    if not jk_clean.lower().startswith("жк"):
+                        street = f"ЖК {jk_clean}"
+                    else:
+                        street = jk_clean
+                    break
+
         # Property type
         combined_prop_text = f"{prop_type_raw} {desc}".strip()
         property_type = CommercialNormalizer.detect_property_type({"category": {}}, combined_prop_text)
@@ -3049,6 +3091,7 @@ class LunNormalizer:
         street_raw = geos.get("street") or ""
         house_raw = geos.get("house") or ""
         district_raw = geos.get("district") or card.get("district_hint") or ""
+        jk_raw = geos.get("residential_complex") or ""
 
         addr_input = f"{street_raw}, {house_raw}".strip(", ") if (street_raw or house_raw) else header
         street, house, district = self.address_parser.parse(
@@ -3057,6 +3100,13 @@ class LunNormalizer:
             district_hint=district_raw,
             fallback_jk=True,
         )
+
+        if not house and jk_raw and not street.startswith("ЖК "):
+            jk_clean = re.sub(r"^(?:пр[еє]міум\s+|відеотур\s+)", "", jk_raw, flags=re.IGNORECASE).strip()
+            if not jk_clean.lower().startswith("жк"):
+                street = f"ЖК {jk_clean}"
+            else:
+                street = jk_clean
 
         if not district and district_raw:
             district = district_raw

@@ -888,13 +888,21 @@ class OLXScraper:
 
                     # Save batches to SQLite
                     if res_batch:
-                        upsert_residential_offers_batch(res_batch, db_path=self.db_path)
+                        upsert_residential_offers_batch(
+                            res_batch,
+                            db_path=self.db_path,
+                            session_id=self.session_id,
+                        )
                         count_res = len(res_batch)
                         self.processed_residential += count_res
                         self.processed_count += count_res
 
                     if comm_batch:
-                        upsert_commercial_offers_batch(comm_batch, db_path=self.db_path)
+                        upsert_commercial_offers_batch(
+                            comm_batch,
+                            db_path=self.db_path,
+                            session_id=self.session_id,
+                        )
                         count_comm = len(comm_batch)
                         self.processed_commercial += count_comm
                         self.processed_count += count_comm

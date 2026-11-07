@@ -6,7 +6,7 @@
   },
   "residential": {
     "https://www.olx.ua/d/uk/obyavlenie/zdam-v-orendu-smart-kvartiru-v-zhk-park-lend-ID11hoDf.html": {
-      "street": "",
+      "street": "ЖК Park Land",
       "house": "",
       "district": "Голосіївський",
       "price": "16000",
@@ -45,7 +45,7 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1k-kvartiri-42m-v-zhk-nova-anglya-budinok-vndzor-persha-zdacha-bez-koms-vd-vlasnika-ukrittya-ID11y7m7.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "28000",
@@ -71,7 +71,7 @@
       "renovation": "author"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-vd-vlasnika-1-km-kvartiri-m-demvska-generator-ID11vH1a.html": {
-      "street": "",
+      "street": "ЖК The Lakes",
       "house": "",
       "district": "Голосіївський",
       "price": "20000",
@@ -162,7 +162,7 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1-kmnatno-kvartiri-v-zhk-nova-anglya-golosvsky-rayon-metro-vasilkvska-ID11st5t.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "18000",
@@ -175,7 +175,7 @@
       "renovation": "author"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-vd-vlasnika-zhk-nova-anglya-ID11u4bU.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "21000",
@@ -214,7 +214,7 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-kvartiri-zhk-nova-anglya-novaya-angliya-metro-vasilkvska-vasilkovskaya-golosvskiy-rayon-balkon-dvospalne-lzhko-konditsoner-ID11uQbv.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "16990",
@@ -227,8 +227,8 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1-kmn-kvartiri-v-zhk-evrika-st-m-podrom-generator-ID11weMt.html": {
-      "street": "",
-      "house": "",
+      "street": "вулиця Конєва Маршала",
+      "house": "5А",
       "district": "Голосіївський",
       "price": "16000",
       "currency": "UAH",
@@ -253,7 +253,7 @@
       "renovation": ""
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1-k-kvartiri-nvertor-v-kvartir-generator-v-budinku-2-poverh-zhk-svitlo-park-svtlo-park-ID11uGec.html": {
-      "street": "",
+      "street": "ЖК Svitlo Park",
       "house": "",
       "district": "Голосіївський",
       "price": "499",
@@ -292,7 +292,7 @@
       "renovation": ""
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1-km-kvartiri-z-avtonomnim-zhivlennyam-tsentr-zhk-volodimiskiy-bez-ID11vXuW.html": {
-      "street": "",
+      "street": "ЖК Володимирський",
       "house": "",
       "district": "Голосіївський",
       "price": "950",
@@ -357,7 +357,7 @@
       "renovation": ""
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-kvartiri-odnokmnatno-zhk-venetsya-ID11z7P7.html": {
-      "street": "",
+      "street": "ЖК Венеція",
       "house": "",
       "district": "Голосіївський",
       "price": "25000",
@@ -474,7 +474,7 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/zdatsya-1-kmnatna-kvartira-v-zhk-venetsya-ID11wi19.html": {
-      "street": "",
+      "street": "ЖК Венеція",
       "house": "",
       "district": "Голосіївський",
       "price": "12500",
@@ -539,7 +539,7 @@
       "renovation": ""
     },
     "https://www.olx.ua/d/uk/obyavlenie/proponutsya-v-orendu-zatishnu-kvartiru-v-zhk-nova-anglya-ID11dqg2.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "14500",
@@ -552,7 +552,7 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-zhk-svitlo-park-46m2-8-poverh-2-s-u-garderob-ID11geJg.html": {
-      "street": "",
+      "street": "ЖК Svitlo Park",
       "house": "",
       "district": "Голосіївський",
       "price": "750",
@@ -604,7 +604,7 @@
       "renovation": ""
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1k-zhk-nova-anglya-ID11gYRu.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "16000",
@@ -617,7 +617,7 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1-kmnatno-kvartiri-v-zhk-respublka-ID11zg92.html": {
-      "street": "",
+      "street": "ЖК Respublika",
       "house": "",
       "district": "Голосіївський",
       "price": "14500",
@@ -786,7 +786,7 @@
       "renovation": ""
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1k-smart-kvartiri-z-yaksnim-remontom-zhk-nova-anglya-12hv-pshki-do-metro-vasilkvska-ID11prTc.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "18000",
@@ -851,7 +851,7 @@
       "renovation": "euro"
     },
     "https://www.olx.ua/d/uk/obyavlenie/persha-zdacha-stilna-1-kmnatna-kvartira-v-zhk-nova-anglya-ID11ztI2.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "610",
@@ -929,7 +929,7 @@
       "renovation": ""
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-1-kmnatno-kvartiri-v-zhk-nova-anglya-ID11jmwQ.html": {
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "price": "16000",
@@ -1543,7 +1543,7 @@
     },
     "https://www.olx.ua/d/uk/obyavlenie/orenda-ofsu-40-m2-vlasnik-zhk-nova-anglya-novaya-angliya-IDX9USf.html": {
       "property_type": "office",
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "business_center_name": "",
@@ -1868,7 +1868,7 @@
     },
     "https://www.olx.ua/d/uk/obyavlenie/super-tsokol-40-metrv-z-mokroyu-tochkoyu-bezpechniy-ofs-salon-abo-shou-rum-metro-vasilkvska-nova-anglya-ID11rXTl.html": {
       "property_type": "office",
-      "street": "",
+      "street": "ЖК Нова Англія",
       "house": "",
       "district": "Голосіївський",
       "business_center_name": "",

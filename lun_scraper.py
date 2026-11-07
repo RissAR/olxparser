@@ -32,6 +32,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from curl_cffi.requests import AsyncSession
 
 from database import (
+    DEFAULT_DB_PATH,
     create_scrape_session,
     init_db,
     update_scrape_session,
@@ -334,11 +335,11 @@ class LunScraper:
 
     def __init__(
         self,
-        db_path: str = "kyiv_rent.db",
+        db_path: Optional[str] = None,
         http_client: Optional[LunHttpClient] = None,
         parser: Optional[LunCardParser] = None,
     ):
-        self.db_path = db_path
+        self.db_path = db_path or DEFAULT_DB_PATH
         self.client = http_client or LunHttpClient()
         self.parser = parser or LunCardParser()
         self.stop_event = asyncio.Event()
@@ -466,6 +467,10 @@ class LunScraper:
             self.session_id, category
         )
 
+        # Quotas for balanced category collection when category="all" and max_offers is set
+        res_quota = max(1, max_offers // 2) if (category == "all" and max_offers is not None) else None
+        comm_quota = (max_offers - res_quota) if (category == "all" and max_offers is not None) else None
+
         slices = self.generate_slices(category)
         if max_slices is not None:
             slices = slices[:max_slices]
@@ -476,6 +481,14 @@ class LunScraper:
             for s_idx, current_slice in enumerate(slices, start=1):
                 if self.stop_event.is_set():
                     break
+
+                if category == "all" and max_offers is not None:
+                    if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                        break
+                    if current_slice.category_type == "residential" and self.processed_residential >= res_quota:
+                        continue
+                    if current_slice.category_type == "commercial" and self.processed_commercial >= comm_quota:
+                        continue
 
                 self.current_slice_label = current_slice.label
                 logger.info("Processing LUN Slice #%s: %s", s_idx, current_slice.label)
@@ -527,6 +540,26 @@ class LunScraper:
                             self.errors_count += 1
                             logger.warning("Error parsing LUN card: %s", parse_err)
 
+                    # Cap batch if max_offers or category quota is set
+                    if current_slice.category_type == "residential":
+                        if category == "all" and res_quota is not None:
+                            rem = max(0, res_quota - self.processed_residential)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
+                        elif max_offers is not None:
+                            rem = max(0, max_offers - self.processed_count)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
+                    else:
+                        if category == "all" and comm_quota is not None:
+                            rem = max(0, comm_quota - self.processed_commercial)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
+                        elif max_offers is not None:
+                            rem = max(0, max_offers - self.processed_count)
+                            if len(batch_offers) > rem:
+                                batch_offers = batch_offers[:rem]
+
                     # Persist batch into database
                     if batch_offers:
                         try:
@@ -572,14 +605,25 @@ class LunScraper:
                             pass
 
                     # Check max_offers limit
-                    if max_offers is not None and self.processed_count >= max_offers:
+                    if category == "all" and max_offers is not None:
+                        if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                            logger.info("Reached target max_offers limit: %s", max_offers)
+                            break
+                        if current_slice.category_type == "residential" and self.processed_residential >= res_quota:
+                            break
+                        if current_slice.category_type == "commercial" and self.processed_commercial >= comm_quota:
+                            break
+                    elif max_offers is not None and self.processed_count >= max_offers:
                         logger.info("Reached target max_offers limit: %s", max_offers)
                         break
 
                     page += 1
 
                 slices_processed += 1
-                if max_offers is not None and self.processed_count >= max_offers:
+                if category == "all" and max_offers is not None:
+                    if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
+                        break
+                elif max_offers is not None and self.processed_count >= max_offers:
                     break
 
             if self.stop_event.is_set():
