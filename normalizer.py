@@ -2853,3 +2853,424 @@ def normalize_rieltor_residential_offer(card_data: Dict[str, Any], seen_date: Op
 def normalize_rieltor_commercial_offer(card_data: Dict[str, Any], seen_date: Optional[str] = None) -> Dict[str, Any]:
     """Top-level helper to normalize commercial Rieltor offers."""
     return _rieltor_normalizer.normalize_commercial(card_data, seen_date)
+
+
+class LunNormalizer:
+    """
+    Normalizes structured LUN.ua offers (residential and commercial)
+    from RSC JSON payload into the canonical 23-column and 35-column datasets.
+    """
+
+    def __init__(self, address_parser: Optional[KyivAddressParser] = None):
+        self.address_parser = address_parser or get_address_parser()
+
+    def normalize_residential(
+        self,
+        card: Dict[str, Any],
+        seen_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        card_id = str(card.get("id") or "")
+        url = card.get("urlRaw") or f"https://lun.ua/uk/realty/{card_id}"
+        # Ensure canonical LUN domain
+        if card_id and not url.startswith("https://lun.ua"):
+            url = f"https://lun.ua/uk/realty/{card_id}"
+
+        text = card.get("text") or ""
+        header = card.get("header") or ""
+        combined_text = f"{header} {text}".strip()
+
+        # Extract geo entities
+        geo_entities = card.get("geoEntities", []) or []
+        geos = {g.get("type"): g.get("name") for g in geo_entities if g.get("type") and g.get("name")}
+
+        street_raw = geos.get("street") or ""
+        house_raw = geos.get("house") or ""
+        district_raw = geos.get("district") or card.get("district_hint") or ""
+        jk_raw = geos.get("residential_complex") or ""
+
+        # Address parsing with JK fallback
+        addr_input = f"{street_raw}, {house_raw}".strip(", ") if (street_raw or house_raw) else header
+        street, house, district = self.address_parser.parse(
+            addr_input,
+            combined_text,
+            district_hint=district_raw,
+            fallback_jk=True,
+        )
+
+        # Stage 2 Fallback: if house missing and jk_raw exists, set street to ЖК <Name>
+        if not house and jk_raw and not street.startswith("ЖК "):
+            jk_clean = re.sub(r"^(?:пр[еє]міум\s+|відеотур\s+)", "", jk_raw, flags=re.IGNORECASE).strip()
+            if not jk_clean.lower().startswith("жк"):
+                street = f"ЖК {jk_clean}"
+            else:
+                street = jk_clean
+
+        # If district was empty from address parser, fallback to district_raw
+        if not district and district_raw:
+            district = district_raw
+
+        price_val = card.get("price")
+        price = str(price_val) if price_val is not None else ""
+        currency_raw = (card.get("currency") or "uah").upper()
+        currency = "UAH" if currency_raw == "UAH" else ("USD" if currency_raw in ("USD", "$") else ("EUR" if currency_raw in ("EUR", "€") else "UAH"))
+
+        is_owner = card.get("isOwner")
+        seller = "owner" if is_owner is True else "agency"
+
+        rooms = clean_int_str(card.get("roomCount"))
+        area_total = clean_number_str(card.get("areaTotal"))
+        area_kitchen = clean_number_str(card.get("areaKitchen"))
+        floor = clean_int_str(card.get("floor"))
+        floors_total = clean_int_str(card.get("floorCount"))
+
+        # Building type mapping by builtYear, houseTypeName, or text
+        built_year = card.get("builtYear")
+        house_type = (card.get("houseTypeName") or "").lower()
+        if built_year:
+            try:
+                y = int(built_year)
+                if y >= 2001:
+                    building_type = "new_build_2010s_plus"
+                elif 1970 <= y <= 2000:
+                    building_type = "cheshka" if ("czech" in house_type or "чеськ" in combined_text.lower()) else "special_project"
+                elif 1955 <= y < 1970:
+                    building_type = "khrushchyovka"
+                elif 1917 <= y < 1955:
+                    building_type = "stalinka"
+                else:
+                    building_type = "tsarist"
+            except (ValueError, TypeError):
+                building_type = ResidentialNormalizer.extract_building_type({}, combined_text)
+        elif "khrushchev" in house_type:
+            building_type = "khrushchyovka"
+        elif "stalinka" in house_type:
+            building_type = "stalinka"
+        elif "czech" in house_type:
+            building_type = "cheshka"
+        elif "tsarist" in house_type:
+            building_type = "tsarist"
+        elif "series" in house_type or "sovmin" in house_type:
+            building_type = "special_project"
+        else:
+            building_type = ResidentialNormalizer.extract_building_type({}, combined_text)
+
+        renovation = ResidentialNormalizer.extract_renovation({}, combined_text)
+        furniture = ResidentialNormalizer.extract_furniture({}, combined_text)
+        appliances = ResidentialNormalizer.extract_appliances({}, combined_text)
+
+        # Autonomy / Generator
+        autonomy_lift = card.get("autonomyLift")
+        autonomy_power = card.get("autonomyPower")
+        if autonomy_lift or autonomy_power:
+            generator_in_building = "yes"
+        else:
+            generator_in_building = ResidentialNormalizer.extract_generator({}, combined_text)
+
+        inverter_in_flat = ResidentialNormalizer.extract_inverter(combined_text)
+
+        # Pets
+        pets_raw = str(card.get("petsAllowedFull") or "").lower()
+        if pets_raw == "yes":
+            pets_allowed = "yes"
+        elif pets_raw == "no":
+            pets_allowed = "no"
+        else:
+            pets_allowed = ResidentialNormalizer.extract_pets({}, combined_text)
+
+        # Kids
+        children_allowed = card.get("childrenAllowed")
+        if children_allowed is True:
+            kids_allowed = "yes"
+        elif children_allowed is False:
+            kids_allowed = "no"
+        else:
+            kids_allowed = ResidentialNormalizer.extract_kids(combined_text)
+
+        # Commission
+        without_comm = card.get("withoutCommission")
+        if without_comm is True or re.search(r"\bбез\s+комісі[їяі]|без\s+комисси[ие]\b", combined_text.lower()):
+            commission_pct = "0"
+        elif card.get("commissionRate") is not None:
+            commission_pct = clean_number_str(card.get("commissionRate"))
+        else:
+            commission_pct = ResidentialNormalizer.extract_commission_pct({}, seller, combined_text)
+
+        utilities_included = ResidentialNormalizer.extract_utilities(combined_text)
+
+        # Effective date
+        insert_time = card.get("insertTime") or card.get("downloadTime") or ""
+        effective_date = seen_date or (insert_time[:10] if len(insert_time) >= 10 else datetime.now().strftime("%Y-%m-%d"))
+
+        return {
+            "url": url,
+            "source": "lun",
+            "seen_date": effective_date,
+            "price": price,
+            "currency": currency,
+            "seller": seller,
+            "street": street,
+            "house": house,
+            "district": district,
+            "rooms": rooms,
+            "area_total": area_total,
+            "area_kitchen": area_kitchen,
+            "floor": floor,
+            "floors_total": floors_total,
+            "building_type": building_type,
+            "renovation": renovation,
+            "furniture": furniture,
+            "appliances": appliances,
+            "generator_in_building": generator_in_building,
+            "inverter_in_flat": inverter_in_flat,
+            "pets_allowed": pets_allowed,
+            "kids_allowed": kids_allowed,
+            "commission_pct": commission_pct,
+            "utilities_included": utilities_included,
+        }
+
+    def normalize_commercial(
+        self,
+        card: Dict[str, Any],
+        seen_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        card_id = str(card.get("id") or "")
+        url = card.get("urlRaw") or f"https://lun.ua/uk/realty/{card_id}"
+        if card_id and not url.startswith("https://lun.ua"):
+            url = f"https://lun.ua/uk/realty/{card_id}"
+
+        text = card.get("text") or ""
+        header = card.get("header") or ""
+        combined_text = f"{header} {text}".strip()
+
+        # Extract geo entities
+        geo_entities = card.get("geoEntities", []) or []
+        geos = {g.get("type"): g.get("name") for g in geo_entities if g.get("type") and g.get("name")}
+
+        street_raw = geos.get("street") or ""
+        house_raw = geos.get("house") or ""
+        district_raw = geos.get("district") or card.get("district_hint") or ""
+
+        addr_input = f"{street_raw}, {house_raw}".strip(", ") if (street_raw or house_raw) else header
+        street, house, district = self.address_parser.parse(
+            addr_input,
+            combined_text,
+            district_hint=district_raw,
+            fallback_jk=True,
+        )
+
+        if not district and district_raw:
+            district = district_raw
+
+        # Property type mapping
+        aims = card.get("aim") or []
+        aim_names = [a.get("name") for a in aims if isinstance(a, dict)]
+        aim_str = " ".join(aim_names)
+        aim_map = {
+            "офіс": "office",
+            "банк": "office",
+            "склад": "warehouse",
+            "виробництво": "production",
+            "торгівельне": "retail",
+            "послуги": "medical_beauty",
+            "вільне": "free_purpose",
+        }
+        prop_detected = None
+        for an in aim_names:
+            al = an.lower()
+            for k, v in aim_map.items():
+                if k in al:
+                    prop_detected = v
+                    break
+            if prop_detected and prop_detected != "free_purpose":
+                break
+
+        if not prop_detected or prop_detected == "free_purpose":
+            property_type = CommercialNormalizer.detect_property_type({"category": {}}, f"{aim_str} {combined_text}")
+        else:
+            property_type = prop_detected
+
+        price_val = card.get("price")
+        price = str(price_val) if price_val is not None else ""
+        currency_raw = (card.get("currency") or "uah").upper()
+        currency = "UAH" if currency_raw == "UAH" else ("USD" if currency_raw in ("USD", "$") else ("EUR" if currency_raw in ("EUR", "€") else "UAH"))
+
+        area_total = clean_number_str(card.get("areaTotal"))
+        if not area_total:
+            m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:м2|м²|кв\.?\s*м)", combined_text)
+            if m:
+                area_total = clean_number_str(m.group(1))
+
+        price_basis = CommercialNormalizer.extract_price_basis(price, currency, area_total, combined_text)
+        vat_included = CommercialNormalizer.extract_vat(combined_text)
+        opex_included, opex_uah_m2 = CommercialNormalizer.extract_opex(combined_text)
+
+        is_owner = card.get("isOwner")
+        seller = "owner" if is_owner is True else "agency"
+
+        business_center_name = CommercialNormalizer.extract_business_center_name(combined_text)
+        building_class = CommercialNormalizer.extract_building_class({}, combined_text)
+
+        floor = clean_int_str(card.get("floor"))
+        floors_total = clean_int_str(card.get("floorCount"))
+
+        t_lower = combined_text.lower()
+        first_line = ""
+        if re.search(r"\b(?:перш\w*\s+ліні\w*|1[- ]?\w*\s+ліні\w*|перв\w*\s+лини\w*|фасад|фасадн\w*)\b", t_lower):
+            first_line = "yes"
+        elif re.search(r"\b(?:друг\w*\s+ліні\w*|2[- ]?\w*\s+ліні\w*|втор\w*\s+лини\w*|у\s+дворі|во\s+дворе)\b", t_lower):
+            first_line = "no"
+
+        separate_entrance = ""
+        if re.search(r"\b(?:окремий\s+вхід|отдельный\s+вход|свій\s+вхід|власний\s+вхід|фасадний\s+вхід)\b", t_lower):
+            separate_entrance = "yes"
+        elif re.search(r"\b(?:спільний\s+вхід|общий\s+вход|вхід\s+через\s+під\'?їзд)\b", t_lower):
+            separate_entrance = "no"
+
+        shop_windows = ""
+        if re.search(r"\b(?:вітрин[и]?|витрин[ы]?|вітринні\s+вікна|панорамні\s+вікна|фасадні\s+вікна|панорамне\s+скління)\b", t_lower):
+            shop_windows = "yes"
+
+        condition = CommercialNormalizer.extract_condition({}, combined_text)
+        furniture = CommercialNormalizer.extract_furniture({}, combined_text)
+
+        ceiling_height_m = clean_number_str(card.get("ceilingHeight"))
+        if not ceiling_height_m:
+            m_ceil = re.search(r"(?:висота\s+стел[іь]?|высота\s+потолк[ао]в?|стеля|потолок|h\s*=)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*м", t_lower)
+            if m_ceil:
+                ceiling_height_m = clean_number_str(m_ceil.group(1))
+
+        power_kw = ""
+        m_pow = re.search(r"(?:потужність|мощность|електроенергія|електрика|світло)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(?:квт|кват|кw|kw)", t_lower)
+        if not m_pow:
+            m_pow = re.search(r"\b(\d+(?:[.,]\d+)?)\s*(?:квт|кw|kw)\b", t_lower)
+        if m_pow:
+            power_kw = clean_number_str(m_pow.group(1))
+
+        parking_spaces = clean_int_str(card.get("houseData", {}).get("parkingCount") if isinstance(card.get("houseData"), dict) else None)
+        if not parking_spaces:
+            m_park = re.search(
+                r"(?:паркомісць|паркомест|парковка\s+на|паркінг\s+на)\s*[:\-]?\s*(\d+)"
+                r"|(?:паркінг|парковка)\s*[:\-]\s*(\d+)"
+                r"|(?:паркінг|парковка)\s+(\d+)\s*(?:авто|машин\w*|місц\w*|паркомісц\w*)"
+                r"|(\d+)\s*(?:паркомісць|паркомісця|паркомест|паркоместа|паркувальних\s+місць)",
+                t_lower,
+            )
+            if m_park:
+                matched_val = next((g for g in m_park.groups() if g is not None), None)
+                if matched_val and 0 < int(matched_val) < 1000:
+                    tail = t_lower[m_park.end():m_park.end() + 20]
+                    if not re.match(r"^\s*(?:грн|uah|usd|eur|\$|€|тис|тисяч|т\.?\s*грн|/міс|/мес)", tail):
+                        parking_spaces = clean_int_str(matched_val)
+
+        # Autonomy / Generator
+        autonomy_power = card.get("autonomyPower")
+        if autonomy_power:
+            generator = "yes"
+        else:
+            generator = CommercialNormalizer.extract_generator(combined_text)
+
+        # Shelter
+        shelter_list = card.get("shelter") or []
+        if shelter_list:
+            shelter_in_building = "yes"
+        else:
+            shelter_in_building = CommercialNormalizer.extract_shelter(combined_text)
+
+        ventilation_hood = ""
+        if re.search(r"\b(?:витяжк[аи]|вытяжк[аи]|промислова\s+витяжка|вентканал|приточно[- ]витяжна)\b", t_lower):
+            ventilation_hood = "yes"
+
+        water_in_rooms = ""
+        if re.search(r"\b(?:мокра\s+точка|мокрі\s+точки|мокрые\s+точки|вода\s+в\s+кабінетах|вода\s+в\s+кабинетах|умивальник\s+в\s+кабінеті)\b", t_lower):
+            water_in_rooms = "yes"
+
+        loading_dock = ""
+        if re.search(r"\b(?:рампа|пандус|доки|dock|вантажна\s+рампа|розвантажувальна\s+рампа|доквеллер)\b", t_lower):
+            loading_dock = "yes"
+
+        floor_load_t_m2 = ""
+        m_load = re.search(r"(?:навантаження\s+(?:на\s+підлогу)?|нагрузка\s+(?:на\s+пол)?)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(?:т/?м[²2]|тонн|т)", t_lower)
+        if m_load:
+            floor_load_t_m2 = clean_number_str(m_load.group(1))
+
+        # Heating
+        heating_name = card.get("heatingSystemName")
+        if heating_name and heating_name != "none":
+            heated = "yes"
+        elif re.search(r"\b(?:холодний\s+склад|неопалюван[а-яА-Я]*|без\s+опалення|неотапливаем[а-яА-Я]*)\b", t_lower):
+            heated = "no"
+        elif re.search(r"\b(?:опалюван[а-яА-Я]*|отапливаем[а-яА-Я]*|тепл[а-яА-Я]*(?:\s+склад)?|опалення\s+є|з\s+опаленням)\b", t_lower):
+            heated = "yes"
+        else:
+            heated = ""
+
+        min_lease_months = ""
+        m_lease = re.search(r"(?:мін(?:імальний)?\s+(?:термін|строк)|мин(?:имальный)?\s+срок|оренда\s+від|аренда\s+от)\s*[:\-]?\s*(\d+)\s*(?:міс|мес)", t_lower)
+        if m_lease:
+            min_lease_months = clean_int_str(m_lease.group(1))
+        elif re.search(r"\b(?:на\s+рік|від\s+1\s*року|від\s+року)\b", t_lower):
+            min_lease_months = "12"
+
+        without_comm = card.get("withoutCommission")
+        if without_comm is True or re.search(r"\bбез\s+комісі[їяі]|без\s+комисси[ие]\b", t_lower):
+            commission_pct = "0"
+        elif card.get("commissionRate") is not None:
+            commission_pct = clean_number_str(card.get("commissionRate"))
+        else:
+            commission_pct = CommercialNormalizer.extract_commission_pct({}, seller, combined_text)
+
+        insert_time = card.get("insertTime") or card.get("downloadTime") or ""
+        effective_date = seen_date or (insert_time[:10] if len(insert_time) >= 10 else datetime.now().strftime("%Y-%m-%d"))
+
+        data = {
+            "url": url,
+            "source": "lun",
+            "seen_date": effective_date,
+            "property_type": property_type,
+            "price": price,
+            "currency": currency,
+            "price_basis": price_basis,
+            "vat_included": vat_included,
+            "opex_included": opex_included,
+            "opex_uah_m2": opex_uah_m2,
+            "seller": seller,
+            "street": street,
+            "house": house,
+            "district": district,
+            "business_center_name": business_center_name,
+            "building_class": building_class,
+            "area_total": area_total,
+            "floor": floor,
+            "floors_total": floors_total,
+            "first_line": first_line,
+            "separate_entrance": separate_entrance,
+            "shop_windows": shop_windows,
+            "condition": condition,
+            "furniture": furniture,
+            "ceiling_height_m": ceiling_height_m,
+            "power_kw": power_kw,
+            "parking_spaces": parking_spaces,
+            "generator": generator,
+            "shelter_in_building": shelter_in_building,
+            "ventilation_hood": ventilation_hood,
+            "water_in_rooms": water_in_rooms,
+            "loading_dock": loading_dock,
+            "floor_load_t_m2": floor_load_t_m2,
+            "heated": heated,
+            "min_lease_months": min_lease_months,
+            "commission_pct": commission_pct,
+        }
+        return apply_conditional_clearing(data)
+
+
+_lun_normalizer = LunNormalizer()
+
+
+def normalize_lun_residential_offer(card: Dict[str, Any], seen_date: Optional[str] = None) -> Dict[str, Any]:
+    """Top-level helper to normalize residential LUN offers."""
+    return _lun_normalizer.normalize_residential(card, seen_date)
+
+
+def normalize_lun_commercial_offer(card: Dict[str, Any], seen_date: Optional[str] = None) -> Dict[str, Any]:
+    """Top-level helper to normalize commercial LUN offers."""
+    return _lun_normalizer.normalize_commercial(card, seen_date)
