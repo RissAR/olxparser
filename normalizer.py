@@ -1235,10 +1235,11 @@ class KyivAddressParser:
             "вулиця Всеволода Змієнка": ["Подільський"],
             "вулиця Андрія Верхогляда": ["Печерський"],
             "вулиця Драгомирова Михайла": ["Печерський"],
+            "вулиця Казимира Малевича": ["Голосіївський", "Шевченківський"],
+            "вулиця Левандовська": ["Печерський"],
         }
         for st_name, dsts in dist_fixes.items():
-            if st_name not in self.canonical_to_districts or not self.canonical_to_districts[st_name]:
-                self.canonical_to_districts[st_name] = dsts
+            self.canonical_to_districts[st_name] = dsts
 
         # Generate Russian feminine/masculine/mixed adjective variants
         # (e.g. ракетная -> ракетна, жилянская -> жилянська, лобановского -> лобановського)
