@@ -91,13 +91,14 @@ def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
 
 
 def init_db(db_path: Optional[str] = None) -> None:
-    """Initializes the database and creates tables and indexes if they do not exist."""
+    """Initializes the database, runs safe column migrations, and creates indexes."""
     conn = get_db_connection(db_path)
     with conn:
-        # Residential table (23 normalized fields + raw_data + timestamps)
+        # Residential table (23 normalized fields + raw_data + source + sessions + timestamps)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS residential_offers (
                 url TEXT PRIMARY KEY NOT NULL,
+                source TEXT NOT NULL DEFAULT 'olx',
                 seen_date TEXT,
                 price REAL,
                 currency TEXT,
@@ -120,16 +121,19 @@ def init_db(db_path: Optional[str] = None) -> None:
                 kids_allowed TEXT,
                 commission_pct REAL,
                 utilities_included TEXT,
+                first_session_id INTEGER,
+                last_session_id INTEGER,
                 raw_data TEXT,
                 created_at TEXT DEFAULT (datetime('now', 'localtime')),
                 updated_at TEXT DEFAULT (datetime('now', 'localtime'))
             );
         """)
 
-        # Commercial table (35 normalized fields + raw_data + timestamps)
+        # Commercial table (35 normalized fields + raw_data + source + sessions + timestamps)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS commercial_offers (
                 url TEXT PRIMARY KEY NOT NULL,
+                source TEXT NOT NULL DEFAULT 'olx',
                 seen_date TEXT,
                 property_type TEXT,
                 price REAL,
@@ -164,6 +168,8 @@ def init_db(db_path: Optional[str] = None) -> None:
                 heated TEXT,
                 min_lease_months INTEGER,
                 commission_pct REAL,
+                first_session_id INTEGER,
+                last_session_id INTEGER,
                 raw_data TEXT,
                 created_at TEXT DEFAULT (datetime('now', 'localtime')),
                 updated_at TEXT DEFAULT (datetime('now', 'localtime'))
@@ -185,32 +191,70 @@ def init_db(db_path: Optional[str] = None) -> None:
             );
         """)
 
+        # Schema migration check for existing databases
+        res_cols = {row[1] for row in conn.execute("PRAGMA table_info(residential_offers)").fetchall()}
+        if res_cols:
+            if "source" not in res_cols:
+                conn.execute("ALTER TABLE residential_offers ADD COLUMN source TEXT NOT NULL DEFAULT 'olx';")
+            if "first_session_id" not in res_cols:
+                conn.execute("ALTER TABLE residential_offers ADD COLUMN first_session_id INTEGER;")
+            if "last_session_id" not in res_cols:
+                conn.execute("ALTER TABLE residential_offers ADD COLUMN last_session_id INTEGER;")
+
+        comm_cols = {row[1] for row in conn.execute("PRAGMA table_info(commercial_offers)").fetchall()}
+        if comm_cols:
+            if "source" not in comm_cols:
+                conn.execute("ALTER TABLE commercial_offers ADD COLUMN source TEXT NOT NULL DEFAULT 'olx';")
+            if "first_session_id" not in comm_cols:
+                conn.execute("ALTER TABLE commercial_offers ADD COLUMN first_session_id INTEGER;")
+            if "last_session_id" not in comm_cols:
+                conn.execute("ALTER TABLE commercial_offers ADD COLUMN last_session_id INTEGER;")
+
         # Indexes for fast querying and filtering
         conn.execute("CREATE INDEX IF NOT EXISTS idx_res_district ON residential_offers(district);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_res_seen_date ON residential_offers(seen_date);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_res_source ON residential_offers(source);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_res_first_session ON residential_offers(first_session_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comm_district ON commercial_offers(district);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comm_property_type ON commercial_offers(property_type);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comm_seen_date ON commercial_offers(seen_date);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comm_source ON commercial_offers(source);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comm_first_session ON commercial_offers(first_session_id);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_status ON scrape_sessions(status);")
     conn.close()
 
 
-def upsert_residential_offer(data: Dict[str, Any], raw_data: Optional[str] = None, db_path: Optional[str] = None) -> None:
-    """Inserts or updates a residential offer."""
+def upsert_residential_offer(
+    data: Dict[str, Any],
+    raw_data: Optional[str] = None,
+    db_path: Optional[str] = None,
+    session_id: Optional[int] = None,
+) -> None:
+    """Inserts or updates a residential offer with source and session tracking."""
     fields = [col for col in RESIDENTIAL_COLUMNS if col in data]
     cols = list(fields)
-    placeholders = [":" + col for col in cols]
     params = {col: data[col] for col in cols}
+
+    cols.append("source")
+    params["source"] = data.get("source") or "olx"
+
+    if session_id is not None:
+        cols.extend(["first_session_id", "last_session_id"])
+        params["first_session_id"] = session_id
+        params["last_session_id"] = session_id
 
     if raw_data is not None:
         cols.append("raw_data")
-        placeholders.append(":raw_data")
         params["raw_data"] = raw_data
 
     cols.append("updated_at")
-    placeholders.append("datetime('now', 'localtime')")
+    placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
-    update_cols = [f"{col} = excluded.{col}" for col in cols if col != "url"]
+    update_cols = [
+        f"{col} = excluded.{col}"
+        for col in cols
+        if col not in ("url", "first_session_id")
+    ]
 
     sql = f"""
         INSERT INTO residential_offers ({', '.join(cols)})
@@ -225,22 +269,37 @@ def upsert_residential_offer(data: Dict[str, Any], raw_data: Optional[str] = Non
     conn.close()
 
 
-def upsert_commercial_offer(data: Dict[str, Any], raw_data: Optional[str] = None, db_path: Optional[str] = None) -> None:
-    """Inserts or updates a commercial offer."""
+def upsert_commercial_offer(
+    data: Dict[str, Any],
+    raw_data: Optional[str] = None,
+    db_path: Optional[str] = None,
+    session_id: Optional[int] = None,
+) -> None:
+    """Inserts or updates a commercial offer with source and session tracking."""
     fields = [col for col in COMMERCIAL_COLUMNS if col in data]
     cols = list(fields)
-    placeholders = [":" + col for col in cols]
     params = {col: data[col] for col in cols}
+
+    cols.append("source")
+    params["source"] = data.get("source") or "olx"
+
+    if session_id is not None:
+        cols.extend(["first_session_id", "last_session_id"])
+        params["first_session_id"] = session_id
+        params["last_session_id"] = session_id
 
     if raw_data is not None:
         cols.append("raw_data")
-        placeholders.append(":raw_data")
         params["raw_data"] = raw_data
 
     cols.append("updated_at")
-    placeholders.append("datetime('now', 'localtime')")
+    placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
-    update_cols = [f"{col} = excluded.{col}" for col in cols if col != "url"]
+    update_cols = [
+        f"{col} = excluded.{col}"
+        for col in cols
+        if col not in ("url", "first_session_id")
+    ]
 
     sql = f"""
         INSERT INTO commercial_offers ({', '.join(cols)})
@@ -257,9 +316,10 @@ def upsert_commercial_offer(data: Dict[str, Any], raw_data: Optional[str] = None
 
 def upsert_residential_offers_batch(
     offers: List[Any],
-    db_path: Optional[str] = None
+    db_path: Optional[str] = None,
+    session_id: Optional[int] = None,
 ) -> int:
-    """Batch inserts or updates residential offers in a single transaction."""
+    """Batch inserts or updates residential offers in a single transaction with session tracking."""
     if not offers:
         return 0
     conn = get_db_connection(db_path)
@@ -272,18 +332,28 @@ def upsert_residential_offers_batch(
 
             fields = [col for col in RESIDENTIAL_COLUMNS if col in data]
             cols = list(fields)
-            placeholders = [":" + col for col in cols]
             params = {col: data[col] for col in cols}
+
+            cols.append("source")
+            params["source"] = data.get("source") or "olx"
+
+            if session_id is not None:
+                cols.extend(["first_session_id", "last_session_id"])
+                params["first_session_id"] = session_id
+                params["last_session_id"] = session_id
 
             if raw_data is not None:
                 cols.append("raw_data")
-                placeholders.append(":raw_data")
                 params["raw_data"] = raw_data
 
             cols.append("updated_at")
-            placeholders.append("datetime('now', 'localtime')")
+            placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
-            update_cols = [f"{col} = excluded.{col}" for col in cols if col != "url"]
+            update_cols = [
+                f"{col} = excluded.{col}"
+                for col in cols
+                if col not in ("url", "first_session_id")
+            ]
 
             sql = f"""
                 INSERT INTO residential_offers ({', '.join(cols)})
@@ -298,9 +368,10 @@ def upsert_residential_offers_batch(
 
 def upsert_commercial_offers_batch(
     offers: List[Any],
-    db_path: Optional[str] = None
+    db_path: Optional[str] = None,
+    session_id: Optional[int] = None,
 ) -> int:
-    """Batch inserts or updates commercial offers in a single transaction."""
+    """Batch inserts or updates commercial offers in a single transaction with session tracking."""
     if not offers:
         return 0
     conn = get_db_connection(db_path)
@@ -313,18 +384,28 @@ def upsert_commercial_offers_batch(
 
             fields = [col for col in COMMERCIAL_COLUMNS if col in data]
             cols = list(fields)
-            placeholders = [":" + col for col in cols]
             params = {col: data[col] for col in cols}
+
+            cols.append("source")
+            params["source"] = data.get("source") or "olx"
+
+            if session_id is not None:
+                cols.extend(["first_session_id", "last_session_id"])
+                params["first_session_id"] = session_id
+                params["last_session_id"] = session_id
 
             if raw_data is not None:
                 cols.append("raw_data")
-                placeholders.append(":raw_data")
                 params["raw_data"] = raw_data
 
             cols.append("updated_at")
-            placeholders.append("datetime('now', 'localtime')")
+            placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
-            update_cols = [f"{col} = excluded.{col}" for col in cols if col != "url"]
+            update_cols = [
+                f"{col} = excluded.{col}"
+                for col in cols
+                if col not in ("url", "first_session_id")
+            ]
 
             sql = f"""
                 INSERT INTO commercial_offers ({', '.join(cols)})
@@ -407,6 +488,8 @@ def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
     try:
         res_count = conn.execute("SELECT COUNT(*) FROM residential_offers").fetchone()[0]
         comm_count = conn.execute("SELECT COUNT(*) FROM commercial_offers").fetchone()[0]
+        res_by_source = dict(conn.execute("SELECT source, COUNT(*) FROM residential_offers GROUP BY source").fetchall())
+        comm_by_source = dict(conn.execute("SELECT source, COUNT(*) FROM commercial_offers GROUP BY source").fetchall())
         latest_session = conn.execute("SELECT * FROM scrape_sessions ORDER BY id DESC LIMIT 1").fetchone()
     except sqlite3.OperationalError:
         conn.close()
@@ -414,6 +497,8 @@ def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
         conn = get_db_connection(db_path)
         res_count = conn.execute("SELECT COUNT(*) FROM residential_offers").fetchone()[0]
         comm_count = conn.execute("SELECT COUNT(*) FROM commercial_offers").fetchone()[0]
+        res_by_source = dict(conn.execute("SELECT source, COUNT(*) FROM residential_offers GROUP BY source").fetchall())
+        comm_by_source = dict(conn.execute("SELECT source, COUNT(*) FROM commercial_offers GROUP BY source").fetchall())
         latest_session = conn.execute("SELECT * FROM scrape_sessions ORDER BY id DESC LIMIT 1").fetchone()
     finally:
         conn.close()
@@ -421,6 +506,8 @@ def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
     return {
         "residential_count": res_count,
         "commercial_count": comm_count,
+        "residential_by_source": res_by_source,
+        "commercial_by_source": comm_by_source,
         "latest_session": dict(latest_session) if latest_session else None,
     }
 
@@ -429,20 +516,36 @@ def get_all_residential_offers(
     db_path: Optional[str] = None,
     only_latest_date: bool = False,
     since_days: Optional[int] = None,
+    source: Optional[str] = None,
+    only_new: bool = False,
+    session_id: Optional[int] = None,
+    include_source: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Retrieves all residential offers ordered by seen_date DESC, created_at DESC, with optional recency filtering."""
+    """Retrieves residential offers ordered by seen_date DESC, created_at DESC, with optional recency, source, and deduplication filtering."""
     init_db(db_path)
     conn = get_db_connection(db_path)
-    cols = ", ".join(RESIDENTIAL_COLUMNS)
+    select_cols = (["source"] + RESIDENTIAL_COLUMNS) if include_source else RESIDENTIAL_COLUMNS
+    cols_sql = ", ".join(select_cols)
     where_clauses: List[str] = []
+    params: List[Any] = []
 
-    if only_latest_date:
+    if source and source.strip().lower() not in ("all", "*"):
+        where_clauses.append("source = ?")
+        params.append(source.strip().lower())
+
+    if only_new:
+        if session_id is not None:
+            where_clauses.append("first_session_id = ?")
+            params.append(session_id)
+        else:
+            where_clauses.append("first_session_id = (SELECT MAX(id) FROM scrape_sessions)")
+    elif only_latest_date:
         where_clauses.append("seen_date = (SELECT MAX(seen_date) FROM residential_offers WHERE seen_date IS NOT NULL)")
     elif since_days is not None:
         where_clauses.append(f"seen_date >= date((SELECT MAX(seen_date) FROM residential_offers WHERE seen_date IS NOT NULL), '-{int(since_days)} days')")
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-    rows = conn.execute(f"SELECT {cols} FROM residential_offers {where_sql} ORDER BY seen_date DESC, created_at DESC").fetchall()
+    rows = conn.execute(f"SELECT {cols_sql} FROM residential_offers {where_sql} ORDER BY seen_date DESC, created_at DESC", params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -451,20 +554,36 @@ def get_all_commercial_offers(
     db_path: Optional[str] = None,
     only_latest_date: bool = False,
     since_days: Optional[int] = None,
+    source: Optional[str] = None,
+    only_new: bool = False,
+    session_id: Optional[int] = None,
+    include_source: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Retrieves all commercial offers ordered by seen_date DESC, created_at DESC, with optional recency filtering."""
+    """Retrieves commercial offers ordered by seen_date DESC, created_at DESC, with optional recency, source, and deduplication filtering."""
     init_db(db_path)
     conn = get_db_connection(db_path)
-    cols = ", ".join(COMMERCIAL_COLUMNS)
+    select_cols = (["source"] + COMMERCIAL_COLUMNS) if include_source else COMMERCIAL_COLUMNS
+    cols_sql = ", ".join(select_cols)
     where_clauses: List[str] = []
+    params: List[Any] = []
 
-    if only_latest_date:
+    if source and source.strip().lower() not in ("all", "*"):
+        where_clauses.append("source = ?")
+        params.append(source.strip().lower())
+
+    if only_new:
+        if session_id is not None:
+            where_clauses.append("first_session_id = ?")
+            params.append(session_id)
+        else:
+            where_clauses.append("first_session_id = (SELECT MAX(id) FROM scrape_sessions)")
+    elif only_latest_date:
         where_clauses.append("seen_date = (SELECT MAX(seen_date) FROM commercial_offers WHERE seen_date IS NOT NULL)")
     elif since_days is not None:
         where_clauses.append(f"seen_date >= date((SELECT MAX(seen_date) FROM commercial_offers WHERE seen_date IS NOT NULL), '-{int(since_days)} days')")
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-    rows = conn.execute(f"SELECT {cols} FROM commercial_offers {where_sql} ORDER BY seen_date DESC, created_at DESC").fetchall()
+    rows = conn.execute(f"SELECT {cols_sql} FROM commercial_offers {where_sql} ORDER BY seen_date DESC, created_at DESC", params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

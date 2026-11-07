@@ -27,7 +27,68 @@ from database import (
 
 DEFAULT_RESIDENTIAL_FILENAME = "olx_residential_kyiv.csv"
 DEFAULT_COMMERCIAL_FILENAME = "olx_commercial_kyiv.csv"
+DEFAULT_UNIFIED_RESIDENTIAL_FILENAME = "unified_residential_kyiv.csv"
+DEFAULT_UNIFIED_COMMERCIAL_FILENAME = "unified_commercial_kyiv.csv"
+DEFAULT_UNIFIED_ALL_FILENAME = "unified_kyiv_real_estate.csv"
 DEFAULT_EXPORTS_DIR = os.getenv("OLX_EXPORTS_DIR", "exports")
+
+# Multi-source column lists containing 'source' (olx, lun, rieltor)
+UNIFIED_RESIDENTIAL_COLUMNS = ["source"] + RESIDENTIAL_COLUMNS
+UNIFIED_COMMERCIAL_COLUMNS = ["source"] + COMMERCIAL_COLUMNS
+
+# Unified single master file columns across both residential and commercial
+UNIFIED_MASTER_COLUMNS = [
+    "source",
+    "category",
+    "url",
+    "seen_date",
+    "price",
+    "currency",
+    "seller",
+    "street",
+    "house",
+    "district",
+    # Residential specific
+    "rooms",
+    "area_kitchen",
+    "building_type",
+    "renovation",
+    "generator_in_building",
+    "inverter_in_flat",
+    "pets_allowed",
+    "kids_allowed",
+    "utilities_included",
+    # Commercial specific
+    "property_type",
+    "price_basis",
+    "vat_included",
+    "opex_included",
+    "opex_uah_m2",
+    "business_center_name",
+    "building_class",
+    "first_line",
+    "separate_entrance",
+    "shop_windows",
+    "condition",
+    "ceiling_height_m",
+    "power_kw",
+    "parking_spaces",
+    "generator",
+    "shelter_in_building",
+    "ventilation_hood",
+    "water_in_rooms",
+    "loading_dock",
+    "floor_load_t_m2",
+    "heated",
+    "min_lease_months",
+    # Shared attributes
+    "area_total",
+    "floor",
+    "floors_total",
+    "furniture",
+    "appliances",
+    "commission_pct",
+]
 
 # Set of columns where integer values are strictly expected when whole
 INTEGER_LIKE_COLUMNS = {
@@ -179,28 +240,42 @@ def export_residential(
     db_path: Optional[str] = None,
     output_path: Optional[Union[str, Path]] = None,
     only_latest_date: bool = False,
+    source: Optional[str] = None,
+    only_new: bool = False,
+    session_id: Optional[int] = None,
+    include_source: bool = False,
 ) -> Dict[str, Any]:
     """
-    Exports all residential offers to a CSV file with strictly 23 columns
-    matching olx-manual-template.csv with utf-8-sig encoding.
+    Exports residential offers to a CSV file.
+    If include_source is True, header includes 'source' as the first column.
+    Otherwise, strictly 23 columns matching olx-manual-template.csv with utf-8-sig encoding.
     """
     if output_path:
         target = Path(output_path)
     elif os.getenv("OLX_EXPORTS_DIR"):
-        target = Path(os.environ["OLX_EXPORTS_DIR"]) / DEFAULT_RESIDENTIAL_FILENAME
+        target = Path(os.environ["OLX_EXPORTS_DIR"]) / (DEFAULT_UNIFIED_RESIDENTIAL_FILENAME if include_source else DEFAULT_RESIDENTIAL_FILENAME)
     else:
-        target = Path(DEFAULT_RESIDENTIAL_FILENAME)
+        target = Path(DEFAULT_UNIFIED_RESIDENTIAL_FILENAME if include_source else DEFAULT_RESIDENTIAL_FILENAME)
 
     if target.parent and not target.parent.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
 
-    offers = get_all_residential_offers(db_path=db_path, only_latest_date=only_latest_date)
+    offers = get_all_residential_offers(
+        db_path=db_path,
+        only_latest_date=only_latest_date,
+        source=source,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=include_source,
+    )
+
+    columns = UNIFIED_RESIDENTIAL_COLUMNS if include_source else RESIDENTIAL_COLUMNS
 
     with open(target, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f, delimiter=",", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
-        writer.writerow(RESIDENTIAL_COLUMNS)
+        writer.writerow(columns)
         for offer in offers:
-            row = [format_csv_value(offer.get(col), col) for col in RESIDENTIAL_COLUMNS]
+            row = [format_csv_value(offer.get(col), col) for col in columns]
             writer.writerow(row)
 
     info = get_file_info(target)
@@ -213,28 +288,42 @@ def export_commercial(
     db_path: Optional[str] = None,
     output_path: Optional[Union[str, Path]] = None,
     only_latest_date: bool = False,
+    source: Optional[str] = None,
+    only_new: bool = False,
+    session_id: Optional[int] = None,
+    include_source: bool = False,
 ) -> Dict[str, Any]:
     """
-    Exports all commercial offers to a CSV file with strictly 35 columns
-    matching olx-commercial-template.csv with utf-8-sig encoding.
+    Exports commercial offers to a CSV file.
+    If include_source is True, header includes 'source' as the first column.
+    Otherwise, strictly 35 columns matching olx-commercial-template.csv with utf-8-sig encoding.
     """
     if output_path:
         target = Path(output_path)
     elif os.getenv("OLX_EXPORTS_DIR"):
-        target = Path(os.environ["OLX_EXPORTS_DIR"]) / DEFAULT_COMMERCIAL_FILENAME
+        target = Path(os.environ["OLX_EXPORTS_DIR"]) / (DEFAULT_UNIFIED_COMMERCIAL_FILENAME if include_source else DEFAULT_COMMERCIAL_FILENAME)
     else:
-        target = Path(DEFAULT_COMMERCIAL_FILENAME)
+        target = Path(DEFAULT_UNIFIED_COMMERCIAL_FILENAME if include_source else DEFAULT_COMMERCIAL_FILENAME)
 
     if target.parent and not target.parent.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
 
-    offers = get_all_commercial_offers(db_path=db_path, only_latest_date=only_latest_date)
+    offers = get_all_commercial_offers(
+        db_path=db_path,
+        only_latest_date=only_latest_date,
+        source=source,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=include_source,
+    )
+
+    columns = UNIFIED_COMMERCIAL_COLUMNS if include_source else COMMERCIAL_COLUMNS
 
     with open(target, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f, delimiter=",", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
-        writer.writerow(COMMERCIAL_COLUMNS)
+        writer.writerow(columns)
         for offer in offers:
-            row = [format_csv_value(offer.get(col), col) for col in COMMERCIAL_COLUMNS]
+            row = [format_csv_value(offer.get(col), col) for col in columns]
             writer.writerow(row)
 
     info = get_file_info(target)
@@ -243,14 +332,150 @@ def export_commercial(
     return info
 
 
+def export_unified_master(
+    db_path: Optional[str] = None,
+    output_path: Optional[Union[str, Path]] = None,
+    only_latest_date: bool = False,
+    only_new: bool = False,
+    session_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Exports a single unified master file with all offers across categories and sources,
+    including 'source' (olx, lun, rieltor) and 'category' (residential, commercial).
+    Common fields are shared, category-specific fields are left blank when inapplicable.
+    """
+    if output_path:
+        target = Path(output_path)
+    elif os.getenv("OLX_EXPORTS_DIR"):
+        target = Path(os.environ["OLX_EXPORTS_DIR"]) / DEFAULT_UNIFIED_ALL_FILENAME
+    else:
+        target = Path(DEFAULT_UNIFIED_ALL_FILENAME)
+
+    if target.parent and not target.parent.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+    res_offers = get_all_residential_offers(
+        db_path=db_path,
+        only_latest_date=only_latest_date,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=True,
+    )
+    comm_offers = get_all_commercial_offers(
+        db_path=db_path,
+        only_latest_date=only_latest_date,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=True,
+    )
+
+    with open(target, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f, delimiter=",", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+        writer.writerow(UNIFIED_MASTER_COLUMNS)
+
+        for offer in res_offers:
+            offer_copy = dict(offer)
+            offer_copy["category"] = "residential"
+            row = [format_csv_value(offer_copy.get(col), col) for col in UNIFIED_MASTER_COLUMNS]
+            writer.writerow(row)
+
+        for offer in comm_offers:
+            offer_copy = dict(offer)
+            offer_copy["category"] = "commercial"
+            row = [format_csv_value(offer_copy.get(col), col) for col in UNIFIED_MASTER_COLUMNS]
+            writer.writerow(row)
+
+    info = get_file_info(target)
+    if not info:
+        raise IOError(f"Failed to retrieve info for exported file: {target}")
+    return info
+
+
+def export_unified(
+    db_path: Optional[str] = None,
+    output_dir: Optional[Union[str, Path]] = None,
+    only_latest_date: bool = False,
+    only_new: bool = False,
+    session_id: Optional[int] = None,
+    dated_archive: bool = False,
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Exports unified CSV files for multi-source scraping (OLX, LUN, Rieltor)
+    with the 'source' column included:
+    - unified_residential_kyiv.csv
+    - unified_commercial_kyiv.csv
+    - unified_kyiv_real_estate.csv (single master file)
+    """
+    effective_dir = output_dir or os.getenv("OLX_EXPORTS_DIR")
+    if effective_dir:
+        out = Path(effective_dir)
+        res_target = out / DEFAULT_UNIFIED_RESIDENTIAL_FILENAME
+        comm_target = out / DEFAULT_UNIFIED_COMMERCIAL_FILENAME
+        master_target = out / DEFAULT_UNIFIED_ALL_FILENAME
+    else:
+        out = Path(".")
+        res_target = Path(DEFAULT_UNIFIED_RESIDENTIAL_FILENAME)
+        comm_target = Path(DEFAULT_UNIFIED_COMMERCIAL_FILENAME)
+        master_target = Path(DEFAULT_UNIFIED_ALL_FILENAME)
+
+    res_info = export_residential(
+        db_path=db_path,
+        output_path=res_target,
+        only_latest_date=only_latest_date,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=True,
+    )
+    comm_info = export_commercial(
+        db_path=db_path,
+        output_path=comm_target,
+        only_latest_date=only_latest_date,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=True,
+    )
+    master_info = export_unified_master(
+        db_path=db_path,
+        output_path=master_target,
+        only_latest_date=only_latest_date,
+        only_new=only_new,
+        session_id=session_id,
+    )
+
+    result = {
+        "unified_residential": res_info,
+        "unified_commercial": comm_info,
+        "unified_master": master_info,
+    }
+
+    if dated_archive:
+        date_stamp = datetime.now().strftime("%Y-%m-%d")
+        dated_master_target = out / f"unified_kyiv_real_estate_{date_stamp}.csv"
+        dated_master_info = export_unified_master(
+            db_path=db_path,
+            output_path=dated_master_target,
+            only_latest_date=only_latest_date,
+            only_new=only_new,
+            session_id=session_id,
+        )
+        result["dated_unified_master"] = dated_master_info
+
+    return result
+
+
 def export_all(
     db_path: Optional[str] = None,
     output_dir: Optional[Union[str, Path]] = None,
     only_latest_date: bool = False,
     dated_archive: bool = False,
+    source: Optional[str] = None,
+    only_new: bool = False,
+    session_id: Optional[int] = None,
+    include_source: bool = False,
+    export_unified_master_file: bool = False,
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Exports both residential and commercial datasets.
+    Exports both residential and commercial datasets, and optionally the unified master file.
     If output_dir is given, files are placed in that directory.
     Otherwise, written to the current working directory.
     If dated_archive is True, also creates dated copies (YYYY-MM-DD).
@@ -258,27 +483,70 @@ def export_all(
     effective_dir = output_dir or os.getenv("OLX_EXPORTS_DIR")
     if effective_dir:
         out = Path(effective_dir)
-        res_target = out / DEFAULT_RESIDENTIAL_FILENAME
-        comm_target = out / DEFAULT_COMMERCIAL_FILENAME
+        res_target = out / (DEFAULT_UNIFIED_RESIDENTIAL_FILENAME if include_source else DEFAULT_RESIDENTIAL_FILENAME)
+        comm_target = out / (DEFAULT_UNIFIED_COMMERCIAL_FILENAME if include_source else DEFAULT_COMMERCIAL_FILENAME)
     else:
         out = Path(".")
-        res_target = Path(DEFAULT_RESIDENTIAL_FILENAME)
-        comm_target = Path(DEFAULT_COMMERCIAL_FILENAME)
+        res_target = Path(DEFAULT_UNIFIED_RESIDENTIAL_FILENAME if include_source else DEFAULT_RESIDENTIAL_FILENAME)
+        comm_target = Path(DEFAULT_UNIFIED_COMMERCIAL_FILENAME if include_source else DEFAULT_COMMERCIAL_FILENAME)
 
-    res_info = export_residential(db_path=db_path, output_path=res_target, only_latest_date=only_latest_date)
-    comm_info = export_commercial(db_path=db_path, output_path=comm_target, only_latest_date=only_latest_date)
+    res_info = export_residential(
+        db_path=db_path,
+        output_path=res_target,
+        only_latest_date=only_latest_date,
+        source=source,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=include_source,
+    )
+    comm_info = export_commercial(
+        db_path=db_path,
+        output_path=comm_target,
+        only_latest_date=only_latest_date,
+        source=source,
+        only_new=only_new,
+        session_id=session_id,
+        include_source=include_source,
+    )
 
     result: Dict[str, Dict[str, Any]] = {
         "residential": res_info,
         "commercial": comm_info,
     }
 
+    if export_unified_master_file:
+        master_target = out / DEFAULT_UNIFIED_ALL_FILENAME
+        master_info = export_unified_master(
+            db_path=db_path,
+            output_path=master_target,
+            only_latest_date=only_latest_date,
+            only_new=only_new,
+            session_id=session_id,
+        )
+        result["unified_master"] = master_info
+
     if dated_archive:
         date_stamp = datetime.now().strftime("%Y-%m-%d")
         dated_res_target = out / f"olx_residential_kyiv_{date_stamp}.csv"
         dated_comm_target = out / f"olx_commercial_kyiv_{date_stamp}.csv"
-        dated_res_info = export_residential(db_path=db_path, output_path=dated_res_target, only_latest_date=only_latest_date)
-        dated_comm_info = export_commercial(db_path=db_path, output_path=dated_comm_target, only_latest_date=only_latest_date)
+        dated_res_info = export_residential(
+            db_path=db_path,
+            output_path=dated_res_target,
+            only_latest_date=only_latest_date,
+            source=source,
+            only_new=only_new,
+            session_id=session_id,
+            include_source=include_source,
+        )
+        dated_comm_info = export_commercial(
+            db_path=db_path,
+            output_path=dated_comm_target,
+            only_latest_date=only_latest_date,
+            source=source,
+            only_new=only_new,
+            session_id=session_id,
+            include_source=include_source,
+        )
         result["dated_residential"] = dated_res_info
         result["dated_commercial"] = dated_comm_info
 
