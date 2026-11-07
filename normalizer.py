@@ -230,6 +230,782 @@ def strip_html(text: Optional[str]) -> str:
     return "\n".join(line for line in lines if line)
 
 
+# ==============================================================================
+# Kyiv Residential Complexes (ЖК) Dictionary & Extraction (Stage 2)
+# ==============================================================================
+KYIV_RESIDENTIAL_COMPLEXES: Dict[str, Dict[str, Any]] = {
+    "Нова Англія": {
+        "district": "Голосіївський",
+        "aliases": [
+            "нова англія",
+            "новій англії",
+            "нову англію",
+            "нової англії",
+            "новая англия",
+            "новой англии",
+            "новую англию",
+            "new england",
+        ],
+        "distinct": True,
+    },
+    "Respublika": {
+        "district": "Голосіївський",
+        "aliases": [
+            "республіка",
+            "республіці",
+            "республіку",
+            "республика",
+            "республике",
+            "республику",
+            "respublika",
+            "респубілка",
+        ],
+        "distinct": True,
+    },
+    "Комфорт Таун": {
+        "district": "Дніпровський",
+        "aliases": [
+            "комфорт таун",
+            "комфорт тауні",
+            "комфорт тауне",
+            "комфорттаун",
+            "comfort town",
+        ],
+        "distinct": True,
+    },
+    "Great": {
+        "district": "Дарницький",
+        "aliases": ["great", "грейт"],
+        "distinct": True,
+    },
+    "Варшавський": {
+        "district": "Подільський",
+        "aliases": [
+            "варшавський плюс",
+            "варшавский плюс",
+            "варшавський 2",
+            "варшавский 2",
+            "варшавський мікрорайон",
+            "варшавский микрорайон",
+            "варшавський",
+            "варшавский",
+            "varshavsky",
+        ],
+        "distinct": True,
+    },
+    "Файна Таун": {
+        "district": "Шевченківський",
+        "aliases": ["файна таун", "файнатаун", "fayna town"],
+        "distinct": True,
+    },
+    "Park Land": {
+        "district": "Голосіївський",
+        "aliases": ["парк ленд", "паркленд", "park land", "parkland"],
+        "distinct": True,
+    },
+    "Svitlo Park": {
+        "district": "Голосіївський",
+        "aliases": ["світло парк", "світлопарк", "svitlo park"],
+        "distinct": True,
+    },
+    "Венеція": {
+        "district": "Голосіївський",
+        "aliases": ["венеція", "венеция", "venezia"],
+        "distinct": True,
+    },
+    "Кришталеві Джерела": {
+        "district": "Голосіївський",
+        "aliases": ["кришталеві джерела", "хрустальные источники", "kryshtalevi dzherela"],
+        "distinct": True,
+    },
+    "Еврика": {
+        "district": "Голосіївський",
+        "aliases": ["еврика", "эврика", "evrika"],
+        "distinct": True,
+    },
+    "Володимирський": {
+        "district": "Голосіївський",
+        "aliases": ["володимирський", "володимиський", "владимирский", "volodymyrsky"],
+        "distinct": False,
+    },
+    "Новопечерські Липки": {
+        "district": "Печерський",
+        "aliases": ["новопечерські липки", "новопечерские липки", "novopecherski lypky"],
+        "distinct": True,
+    },
+    "Новопечерська Вежа": {
+        "district": "Печерський",
+        "aliases": ["новопечерська вежа", "новопечерская башня", "новопечерская вежа"],
+        "distinct": True,
+    },
+    "Бульвар Фонтанів": {
+        "district": "Печерський",
+        "aliases": ["бульвар фонтанів", "бульвар фонтанов"],
+        "distinct": True,
+    },
+    "Французький квартал": {
+        "district": "Печерський",
+        "aliases": [
+            "французький квартал 2",
+            "французский квартал 2",
+            "французький квартал",
+            "французский квартал",
+        ],
+        "distinct": True,
+    },
+    "Tetris Hall": {
+        "district": "Печерський",
+        "aliases": ["тетрис холл", "тетрис хол", "тетріс хол", "tetris hall"],
+        "distinct": True,
+    },
+    "Jack House": {
+        "district": "Печерський",
+        "aliases": ["jack house", "джек хаус"],
+        "distinct": True,
+    },
+    "Taryan Towers": {
+        "district": "Печерський",
+        "aliases": ["taryan towers", "тарян тауерс", "тарьян тауэрс"],
+        "distinct": True,
+    },
+    "RiverStone": {
+        "district": "Дарницький",
+        "aliases": ["riverstone", "рівер стоун", "ривер стоун", "ріверстоун", "риверстоун"],
+        "distinct": True,
+    },
+    "Seven": {
+        "district": "Дарницький",
+        "aliases": ["seven", "севен"],
+        "distinct": True,
+    },
+    "Зарічний": {
+        "district": "Дарницький",
+        "aliases": ["зарічний", "заречный", "zarichny"],
+        "distinct": True,
+    },
+    "Славутич": {
+        "district": "Дарницький",
+        "aliases": ["славутич 2.0", "славутич 2", "славутич", "slavutych"],
+        "distinct": False,
+    },
+    "Лебединий": {
+        "district": "Дарницький",
+        "aliases": ["лебединий", "лебединый", "lebedynyi"],
+        "distinct": True,
+    },
+    "Поетичний": {
+        "district": "Дарницький",
+        "aliases": ["поетичний", "поэтический"],
+        "distinct": True,
+    },
+    "Причал 8": {
+        "district": "Дарницький",
+        "aliases": ["причал 8", "причал вісім"],
+        "distinct": True,
+    },
+    "Галактика": {
+        "district": "Дніпровський",
+        "aliases": ["галактика", "galaktyka"],
+        "distinct": True,
+    },
+    "Автограф": {
+        "district": "Дніпровський",
+        "aliases": ["автограф", "avtograf"],
+        "distinct": True,
+    },
+    "Русанівська Гавань": {
+        "district": "Дніпровський",
+        "aliases": ["русанівська гавань", "русановская гавань"],
+        "distinct": True,
+    },
+    "Парк Авеню": {
+        "district": "Голосіївський",
+        "aliases": ["парк авеню vip", "парк авеню", "park avenue vip", "park avenue"],
+        "distinct": True,
+    },
+    "Метрополіс": {
+        "district": "Голосіївський",
+        "aliases": ["метрополіс", "метрополис", "metropolis"],
+        "distinct": True,
+    },
+    "White Lines": {
+        "district": "Голосіївський",
+        "aliases": ["white lines", "вайт лайнс"],
+        "distinct": True,
+    },
+    "4 Сезони": {
+        "district": "Голосіївський",
+        "aliases": ["4 сезони", "4 сезона", "четыре сезона", "чотири сезони", "4 seasons"],
+        "distinct": True,
+    },
+    "Сонячна Брама": {
+        "district": "Голосіївський",
+        "aliases": ["сонячна брама", "солнечная брама"],
+        "distinct": True,
+    },
+    "Ліко-Град": {
+        "district": "Голосіївський",
+        "aliases": [
+            "liko-grad/ perfect",
+            "liko-grad perfect town",
+            "perfect town",
+            "ліко-град",
+            "ліко град",
+            "лико-град",
+            "лико град",
+            "liko grad",
+        ],
+        "distinct": True,
+    },
+    "The Lakes": {
+        "district": "Голосіївський",
+        "aliases": ["the lakes", "зе лейкс", "лейкс"],
+        "distinct": True,
+    },
+    "Orange City": {
+        "district": "Голосіївський",
+        "aliases": ["orange city", "оранж сіті", "оранж сити", "оранж"],
+        "distinct": True,
+    },
+    "OK'LAND": {
+        "district": "Солом'янський",
+        "aliases": ["ok'land", "okland", "окланд", "окленд"],
+        "distinct": True,
+    },
+    "Династія": {
+        "district": "Солом'янський",
+        "aliases": ["династія", "династия", "dynasty"],
+        "distinct": True,
+    },
+    "Time": {
+        "district": "Солом'янський",
+        "aliases": ["time", "тайм"],
+        "distinct": False,
+    },
+    "Квартет": {
+        "district": "Солом'янський",
+        "aliases": ["квартет", "quartet"],
+        "distinct": True,
+    },
+    "Малахіт": {
+        "district": "Солом'янський",
+        "aliases": ["малахіт", "малахит", "malahit"],
+        "distinct": True,
+    },
+    "Смарагдовий": {
+        "district": "Солом'янський",
+        "aliases": ["смарагдовий", "изумрудный"],
+        "distinct": True,
+    },
+    "Пори Року": {
+        "district": "Солом'янський",
+        "aliases": ["пори року", "времена года"],
+        "distinct": False,
+    },
+    "Медовий": {
+        "district": "Солом'янський",
+        "aliases": ["медовий 2", "медовый 2", "медовий", "медовый"],
+        "distinct": False,
+    },
+    "Geneve": {
+        "district": "Солом'янський",
+        "aliases": ["geneve", "женева"],
+        "distinct": True,
+    },
+    "Sky Avenue": {
+        "district": "Солом'янський",
+        "aliases": ["sky avenue", "скай авеню"],
+        "distinct": True,
+    },
+    "Genesis": {
+        "district": "Солом'янський",
+        "aliases": ["genesis", "генезис"],
+        "distinct": True,
+    },
+    "Campus": {
+        "district": "Солом'янський",
+        "aliases": ["campus", "кампус"],
+        "distinct": True,
+    },
+    "Нивки-Парк": {
+        "district": "Святошинський",
+        "aliases": ["нивки-парк", "нивки парк", "nyvky park"],
+        "distinct": True,
+    },
+    "Святобор": {
+        "district": "Святошинський",
+        "aliases": ["святобор", "svyatobor"],
+        "distinct": True,
+    },
+    "San Francisco": {
+        "district": "Святошинський",
+        "aliases": ["san francisco creative house", "san francisco", "сан франциско"],
+        "distinct": True,
+    },
+    "Відпочинок": {
+        "district": "Святошинський",
+        "aliases": ["відпочинок", "отдых"],
+        "distinct": False,
+    },
+    "Грюнвальд": {
+        "district": "Святошинський",
+        "aliases": ["грюнвальд", "grunwald"],
+        "distinct": True,
+    },
+    "Верховина": {
+        "district": "Святошинський",
+        "aliases": ["верховина"],
+        "distinct": False,
+    },
+    "Академ-Квартал": {
+        "district": "Святошинський",
+        "aliases": ["академ-квартал", "академ квартал"],
+        "distinct": True,
+    },
+    "Lucky Land": {
+        "district": "Святошинський",
+        "aliases": ["lucky land", "лакі ленд", "лаки ленд"],
+        "distinct": True,
+    },
+    "Діброва Парк": {
+        "district": "Подільський",
+        "aliases": ["діброва парк", "диброва парк", "dibrova park"],
+        "distinct": True,
+    },
+    "Місто Квітів": {
+        "district": "Подільський",
+        "aliases": ["місто квітів", "город цветов"],
+        "distinct": True,
+    },
+    "Паркове Місто": {
+        "district": "Подільський",
+        "aliases": ["паркове місто", "парковый город"],
+        "distinct": True,
+    },
+    "Ліпінка": {
+        "district": "Подільський",
+        "aliases": ["ліпінка", "липинка", "lipinka"],
+        "distinct": True,
+    },
+    "Крістер Град": {
+        "district": "Подільський",
+        "aliases": ["крістер град", "кристер град"],
+        "distinct": True,
+    },
+    "Замковецький": {
+        "district": "Подільський",
+        "aliases": ["замковецький", "замковецкий"],
+        "distinct": False,
+    },
+    "Rybalsky": {
+        "district": "Подільський",
+        "aliases": ["rybalsky", "рибальський", "рыбальский"],
+        "distinct": True,
+    },
+    "Podil Plaza": {
+        "district": "Подільський",
+        "aliases": ["podil plaza & residence", "podil plaza", "поділ плаза", "подол плаза"],
+        "distinct": True,
+    },
+    "Поділ Град": {
+        "district": "Подільський",
+        "aliases": ["поділ град", "подол град"],
+        "distinct": True,
+    },
+    "Воздвиженка": {
+        "district": "Подільський",
+        "aliases": ["воздвиженка"],
+        "distinct": True,
+    },
+    "Сирецькі Сади": {
+        "district": "Подільський",
+        "aliases": ["сирецькі сади", "сырецкие сады"],
+        "distinct": True,
+    },
+    "Spas Sky": {
+        "district": "Подільський",
+        "aliases": ["spas sky", "спас скай"],
+        "distinct": True,
+    },
+    "Obolon Residences": {
+        "district": "Оболонський",
+        "aliases": ["obolon residences", "оболонь резиденс"],
+        "distinct": True,
+    },
+    "Park Stone": {
+        "district": "Оболонський",
+        "aliases": ["park stone", "парк стоун", "паркстоун"],
+        "distinct": True,
+    },
+    "Оазис": {
+        "district": "Оболонський",
+        "aliases": ["оазис", "oazis"],
+        "distinct": False,
+    },
+    "Яскравий": {
+        "district": "Оболонський",
+        "aliases": ["яскравий", "яркий"],
+        "distinct": False,
+    },
+    "Міністерський": {
+        "district": "Оболонський",
+        "aliases": ["міністерський", "министерский"],
+        "distinct": False,
+    },
+    "Бережанський": {
+        "district": "Оболонський",
+        "aliases": ["бережанський", "бережанский"],
+        "distinct": False,
+    },
+    "Navigator": {
+        "district": "Оболонський",
+        "aliases": [
+            "navigator 2",
+            "навігатор 2",
+            "навигатор 2",
+            "navigator",
+            "навігатор",
+            "навигатор",
+        ],
+        "distinct": True,
+    },
+    "Forest Park": {
+        "district": "Оболонський",
+        "aliases": ["forest park", "форест парк"],
+        "distinct": True,
+    },
+    "Престиж Хол": {
+        "district": "Печерський",
+        "aliases": ["prestige hall", "престиж хол", "престиж холл"],
+        "distinct": True,
+    },
+    "Аристократ": {
+        "district": "Печерський",
+        "aliases": ["аристократ", "aristokrat"],
+        "distinct": True,
+    },
+    "Alter Ego": {
+        "district": "Печерський",
+        "aliases": ["alter ego", "альтер его", "альтер эго"],
+        "distinct": True,
+    },
+    "Cardinal": {
+        "district": "Печерський",
+        "aliases": ["cardinal", "кардинал"],
+        "distinct": True,
+    },
+    "Richmond": {
+        "district": "Печерський",
+        "aliases": ["richmond", "річмонд", "ричмонд"],
+        "distinct": True,
+    },
+    "Central Park": {
+        "district": "Печерський",
+        "aliases": ["central park", "централ парк"],
+        "distinct": True,
+    },
+    "PecherSKY": {
+        "district": "Печерський",
+        "aliases": ["pechersky", "печерскай"],
+        "distinct": True,
+    },
+    "Busov Hill": {
+        "district": "Печерський",
+        "aliases": ["busov hill", "бусов хілл", "бусов хилл"],
+        "distinct": True,
+    },
+    "Signature": {
+        "district": "Печерський",
+        "aliases": ["signature", "сигнатура"],
+        "distinct": True,
+    },
+    "Linden": {
+        "district": "Печерський",
+        "aliases": ["linden luxury residences", "linden", "лінден", "линден"],
+        "distinct": True,
+    },
+    "Chelsea Tower": {
+        "district": "Голосіївський",
+        "aliases": ["chelsea tower", "челсі тауер", "челси тауэр"],
+        "distinct": True,
+    },
+    "Elyseum": {
+        "district": "Шевченківський",
+        "aliases": ["elyseum", "елізіум", "элизиум"],
+        "distinct": True,
+    },
+    "Покровський Посад": {
+        "district": "Шевченківський",
+        "aliases": ["покровський посад", "покровский посад"],
+        "distinct": True,
+    },
+    "Ярославів Град": {
+        "district": "Шевченківський",
+        "aliases": ["ярославів град", "ярославов град"],
+        "distinct": True,
+    },
+    "Львівський Квартал": {
+        "district": "Шевченківський",
+        "aliases": ["львівський квартал", "львовский квартал"],
+        "distinct": True,
+    },
+    "Smart Plaza Polytech": {
+        "district": "Шевченківський",
+        "aliases": ["smart plaza polytech", "smart plaza політех", "смарт плаза політех"],
+        "distinct": True,
+    },
+    "Crystal Park": {
+        "district": "Шевченківський",
+        "aliases": ["crystal park tower", "crystal park", "кристал парк", "кристалл парк"],
+        "distinct": True,
+    },
+    "Герцен-Парк": {
+        "district": "Шевченківський",
+        "aliases": ["герцен-парк", "герцен парк"],
+        "distinct": True,
+    },
+    "Срібна Вежа": {
+        "district": "Шевченківський",
+        "aliases": ["срібна вежа", "серебряная башня"],
+        "distinct": True,
+    },
+    "Златоустівський": {
+        "district": "Шевченківський",
+        "aliases": ["златоустівський", "златоустовский"],
+        "distinct": False,
+    },
+    "Старокиївський": {
+        "district": "Шевченківський",
+        "aliases": ["старокиївський", "старокиевский"],
+        "distinct": False,
+    },
+    "Hoffmann Haus": {
+        "district": "Шевченківський",
+        "aliases": ["hoffmann haus", "гофман хаус", "хоффманн хаус"],
+        "distinct": True,
+    },
+    "AuRoom": {
+        "district": "Шевченківський",
+        "aliases": ["auroom", "аурум"],
+        "distinct": True,
+    },
+    "38 Жемчужина": {
+        "district": "Голосіївський",
+        "aliases": [
+            "38 жемчужина",
+            "38-я жемчужина",
+            "тридцать восьмая жемчужина",
+            "тридцять восьма перлина",
+        ],
+        "distinct": True,
+    },
+    "Chicago Central House": {
+        "district": "Голосіївський",
+        "aliases": ["chicago central house", "chicago", "чікаго", "чикаго"],
+        "distinct": True,
+    },
+    "New York Concept House": {
+        "district": "Голосіївський",
+        "aliases": ["new york concept house", "new york", "нью йорк", "нью-йорк"],
+        "distinct": True,
+    },
+    "Парк-хол Горький": {
+        "district": "Голосіївський",
+        "aliases": ["парк-хол горький", "парк холл горький"],
+        "distinct": True,
+    },
+    "SkyLand": {
+        "district": "Голосіївський",
+        "aliases": ["skyland", "скайленд", "скайлен"],
+        "distinct": True,
+    },
+    "Royal Tower": {
+        "district": "Голосіївський",
+        "aliases": ["royal tower", "роял тауер", "роял тауэр"],
+        "distinct": True,
+    },
+    "Каховська": {
+        "district": "Дніпровський",
+        "aliases": ["каховська", "каховская"],
+        "distinct": False,
+    },
+    "Star City": {
+        "district": "Дніпровський",
+        "aliases": ["star city", "стар сіті", "стар сити"],
+        "distinct": True,
+    },
+    "Terracotta": {
+        "district": "Дарницький",
+        "aliases": ["terracotta", "терракотта", "теракота"],
+        "distinct": True,
+    },
+    "Метрополія": {
+        "district": "Дарницький",
+        "aliases": ["метрополія 2", "метрополия 2", "метрополія", "метрополия"],
+        "distinct": True,
+    },
+    "Урлівський": {
+        "district": "Дарницький",
+        "aliases": [
+            "урлівський 2",
+            "урловский 2",
+            "урлівський 1",
+            "урловский 1",
+            "урлівський",
+            "урловский",
+        ],
+        "distinct": False,
+    },
+    "Срібний Бриз": {
+        "district": "Дніпровський",
+        "aliases": ["срібний бриз", "серебряный бриз"],
+        "distinct": True,
+    },
+    "Riviera Riverside": {
+        "district": "Дніпровський",
+        "aliases": ["riviera riverside", "ривьера риверсайд"],
+        "distinct": True,
+    },
+    "Авеню 42": {
+        "district": "Голосіївський",
+        "aliases": ["авеню 42", "avenue 42"],
+        "distinct": True,
+    },
+    "Деміївський квартал": {
+        "district": "Голосіївський",
+        "aliases": ["деміївський квартал", "демеевский квартал"],
+        "distinct": True,
+    },
+    "Голосіївський Двір": {
+        "district": "Голосіївський",
+        "aliases": ["голосіївський двір", "голосеевский двор"],
+        "distinct": True,
+    },
+    "Елегант": {
+        "district": "Шевченківський",
+        "aliases": ["елегант", "элегант"],
+        "distinct": True,
+    },
+    "Standard One": {
+        "district": "Голосіївський",
+        "aliases": ["standard one", "standard 1", "s1"],
+        "distinct": True,
+    },
+    "Панорама Сіті": {
+        "district": "Голосіївський",
+        "aliases": ["панорама сіті", "панорама сити"],
+        "distinct": True,
+    },
+    "Concept Hall": {
+        "district": "Голосіївський",
+        "aliases": ["concept hall", "концепт хол", "концепт холл"],
+        "distinct": True,
+    },
+    "Diplomat Hall": {
+        "district": "Голосіївський",
+        "aliases": ["diplomat hall", "дипломат хол", "дипломат холл"],
+        "distinct": True,
+    },
+    "Resident Concept House": {
+        "district": "Голосіївський",
+        "aliases": ["resident concept house", "resident concept"],
+        "distinct": True,
+    },
+    "Казка": {
+        "district": "Голосіївський",
+        "aliases": ["казка", "сказка"],
+        "distinct": False,
+    },
+    "Ново-Деміївський": {
+        "district": "Голосіївський",
+        "aliases": [
+            "ново-деміївський",
+            "ново-демеевский",
+            "новодеміївський",
+            "новодемеевский",
+        ],
+        "distinct": True,
+    },
+}
+
+# Compile search structures for ЖК
+_COMPILED_JK_ALIASES: List[Tuple[str, str, Optional[str], bool]] = []
+for _jk_name, _jk_data in KYIV_RESIDENTIAL_COMPLEXES.items():
+    for _jk_alias in _jk_data["aliases"]:
+        _COMPILED_JK_ALIASES.append(
+            (_jk_alias, _jk_name, _jk_data.get("district"), _jk_data.get("distinct", False))
+        )
+_COMPILED_JK_ALIASES.sort(key=lambda x: len(x[0]), reverse=True)
+
+JK_PREFIX_RE = re.compile(
+    r"\b(?:жк|житлов\w*\s+комплекс\w*|жилой\s+комплекс\w*|ж/к|клубн\w*\s+будинок\w*|к/б)\b",
+    re.IGNORECASE,
+)
+JK_QUOTED_RE = re.compile(
+    r"\b(?:жк|житлов\w*\s+комплекс\w*|жилой\s+комплекс\w*|ж/к)\s+[«\"“'’]([^»\"”'’\n\r]{2,40})[»\"”'’]",
+    re.IGNORECASE,
+)
+JK_STOP_WORDS_RE = re.compile(
+    r"^(?:київ|києва|оренда|продаж|квартира|будинок|офіс|приміщення|центр|поділ|печерськ|голосієво)$",
+    re.IGNORECASE,
+)
+
+
+def extract_residential_complex(text: str) -> Optional[Tuple[str, Optional[str]]]:
+    """
+    Detects residential complex (ЖК) in text.
+    Returns (canonical_name, district) or None.
+
+    Priority:
+    1. Check against KYIV_RESIDENTIAL_COMPLEXES aliases:
+       - Match longer aliases first.
+       - If alias is distinct, can match with or without explicit 'ЖК' keyword.
+       - If alias is not distinct (street name collision), require explicit 'ЖК' keyword.
+    2. Fallback to generic regex: 'ЖК <Name>' / 'житловий комплекс <Name>'
+       extracting valid complex names in quotes.
+    """
+    if not text:
+        return None
+
+    clean = strip_html(text)
+    lower = clean.lower()
+
+    # 1. First check dictionary aliases (sorted by length DESC)
+    for alias, canonical, district, distinct in _COMPILED_JK_ALIASES:
+        pattern = r"\b" + re.escape(alias) + r"\b"
+        m = re.search(pattern, lower)
+        if m:
+            start_pos = m.start()
+            prefix_ctx = lower[max(0, start_pos - 35) : start_pos]
+            suffix_ctx = lower[m.end() : min(len(lower), m.end() + 25)]
+
+            # Reject if preceded or followed by metro station indicator
+            if re.search(
+                r"\b(?:метро|ст\.?\s*м\.?|станці[яєїією]\s+(?:метро)?|до\s+метро)\s*[:\-–—]?\s*$",
+                prefix_ctx,
+            ):
+                continue
+            if re.search(r"^\s*(?:метро|станці[яєїі])\b", suffix_ctx):
+                continue
+
+            # If distinct, alias alone is sufficient
+            if distinct:
+                return canonical, district
+
+            # If not distinct (common word/street collision), require explicit JK indicator
+            if JK_PREFIX_RE.search(prefix_ctx):
+                return canonical, district
+
+    # 2. Quoted generic ЖК: e.g. ЖК "Назва" or житловий комплекс «Назва»
+    m_quoted = JK_QUOTED_RE.search(clean)
+    if m_quoted:
+        name = m_quoted.group(1).strip()
+        name = re.sub(r"^[«\"“'’\s]+|[»\"”'’\s]+$", "", name)
+        if len(name) >= 2 and not JK_STOP_WORDS_RE.match(name):
+            return name, None
+
+    return None
+
 
 def clean_number_str(val: Any) -> str:
     """Formats a float or int into a dot-separated string without scientific notation or trailing zeroes."""
@@ -632,11 +1408,17 @@ class KyivAddressParser:
                     return house_str.upper()
         return ""
 
+    @staticmethod
+    def extract_residential_complex(text: str) -> Optional[Tuple[str, Optional[str]]]:
+        """Extracts residential complex (ЖК) and district from text."""
+        return extract_residential_complex(text)
+
     def parse(
         self,
         title: str,
         description: Optional[str] = None,
         district_hint: Optional[str] = None,
+        fallback_jk: bool = False,
     ) -> Tuple[str, str, str]:
         """
         Main address parsing entrypoint.
@@ -645,6 +1427,7 @@ class KyivAddressParser:
         2. If street found in Title but house is missing, search Description for house (or street + house).
         3. If street not found in Title, search Description.
         4. Resolve district from hint or canonical street's mapped districts.
+        5. If fallback_jk is True and house is missing, fallback to residential complex (ЖК).
         """
         street, house = self.extract_street_and_house(title)
 
@@ -667,6 +1450,18 @@ class KyivAddressParser:
                 district = valid_districts[0]
         elif district_hint and district_hint in KYIV_DISTRICTS:
             district = district_hint
+
+        # Stage 2 ЖК fallback rule: if house is missing and fallback_jk is enabled
+        if fallback_jk and not house:
+            combined = f"{title}\n{description or ''}"
+            jk_info = self.extract_residential_complex(combined)
+            if jk_info:
+                jk_name, jk_dist = jk_info
+                formatted_jk = jk_name if jk_name.startswith("ЖК ") else f"ЖК {jk_name}"
+                if not street:
+                    street = formatted_jk
+                if not district and jk_dist:
+                    district = jk_dist
 
         return street, house, district
 
@@ -1164,7 +1959,7 @@ class ResidentialNormalizer(BaseNormalizer):
                 district_hint = dist_obj.get("name") or ""
 
         parser = get_address_parser()
-        street, house, district = parser.parse(title, desc, district_hint)
+        street, house, district = parser.parse(title, desc, district_hint, fallback_jk=True)
 
         # Price and currency
         price, currency = self.extract_price_and_currency(offer, combined_text)
@@ -1552,7 +2347,7 @@ class CommercialNormalizer(BaseNormalizer):
                 district_hint = dist_obj.get("name") or ""
 
         parser = get_address_parser()
-        street, house, district = parser.parse(title, desc, district_hint)
+        street, house, district = parser.parse(title, desc, district_hint, fallback_jk=True)
 
         property_type = self.detect_property_type(offer, combined_text)
         price, currency = self.extract_price_and_currency(offer, combined_text)
