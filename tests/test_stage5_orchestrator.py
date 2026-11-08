@@ -44,6 +44,8 @@ class TestStage5Orchestrator(unittest.IsolatedAsyncioTestCase):
             "olx_storage.db", "olx_storage.db-wal", "olx_storage.db-shm",
             "kyiv_rent.db", "kyiv_rent.db-wal", "kyiv_rent.db-shm",
             "olx_residential_kyiv.csv", "olx_commercial_kyiv.csv",
+            "rieltor_residential_kyiv.csv", "rieltor_commercial_kyiv.csv",
+            "lun_residential_kyiv.csv", "lun_commercial_kyiv.csv",
             "unified_residential_kyiv.csv", "unified_commercial_kyiv.csv",
             "unified_kyiv_real_estate.csv",
         ]:
@@ -225,6 +227,111 @@ class TestStage5Orchestrator(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["status"], "success")
         self.assertEqual(data["source"], "rieltor")
         self.assertIn("exported_files", data)
+
+    async def test_incremental_deduplication_and_seen_date_preservation(self):
+        """Verifies get_existing_urls, seen_date preservation on conflict, and multi-session only_new."""
+        s1 = database.create_scrape_session("all", db_path=self.db_path)
+        s2 = database.create_scrape_session("all", db_path=self.db_path)
+
+        database.upsert_residential_offer(
+            {
+                "url": "https://www.olx.ua/d/uk/obyavlenie/test-1-IDAAA.html",
+                "seen_date": "2026-11-01",
+                "price": 15000,
+                "currency": "UAH",
+                "rooms": 1,
+                "area_total": 40.0,
+                "district": "Печерський",
+                "source": "olx",
+            },
+            session_id=s1,
+            db_path=self.db_path,
+        )
+
+        # Upsert same URL in a later session with a newer seen_date -> original seen_date & first_session_id must be preserved
+        database.upsert_residential_offer(
+            {
+                "url": "https://www.olx.ua/d/uk/obyavlenie/test-1-IDAAA.html",
+                "seen_date": "2026-11-08",
+                "price": 16000,
+                "currency": "UAH",
+                "rooms": 1,
+                "area_total": 40.0,
+                "district": "Печерський",
+                "source": "olx",
+            },
+            session_id=s2,
+            db_path=self.db_path,
+        )
+
+        # Add a genuinely new offer in session s2
+        database.upsert_residential_offer(
+            {
+                "url": "https://rieltor.ua/flats-rent/view/123456/",
+                "seen_date": "2026-11-08",
+                "price": 20000,
+                "currency": "UAH",
+                "rooms": 2,
+                "area_total": 55.0,
+                "district": "Шевченківський",
+                "source": "rieltor",
+            },
+            session_id=s2,
+            db_path=self.db_path,
+        )
+
+        known = database.get_existing_urls(category="residential", db_path=self.db_path)
+        self.assertIn("https://www.olx.ua/d/uk/obyavlenie/test-1-IDAAA.html", known)
+        self.assertIn("https://rieltor.ua/flats-rent/view/123456/", known)
+
+        # Check preserved seen_date on first offer
+        olx_offers = database.get_all_residential_offers(db_path=self.db_path, source="olx")
+        self.assertEqual(len(olx_offers), 1)
+        self.assertEqual(olx_offers[0]["seen_date"], "2026-11-01")
+        self.assertEqual(olx_offers[0]["price"], 16000)
+
+        # Check only_new for session s2
+        new_in_s2 = database.get_all_residential_offers(
+            db_path=self.db_path, only_new=True, session_id=[s2]
+        )
+        self.assertEqual(len(new_in_s2), 1)
+        self.assertEqual(new_in_s2[0]["url"], "https://rieltor.ua/flats-rent/view/123456/")
+
+    async def test_monotonic_progress_pct_across_parallel_sources(self):
+        """Verifies progress_pct never decreases even when total_found grows dynamically."""
+        observed_pcts = []
+
+        async def mock_olx_run(*args, **kwargs):
+            on_prog = kwargs.get("on_progress")
+            self.orchestrator.olx_scraper.total_slices = 10
+            self.orchestrator.olx_scraper.completed_slices = 5
+            self.orchestrator.olx_scraper.total_found = 10
+            self.orchestrator.olx_scraper.processed_count = 10
+            self.orchestrator.olx_scraper._update_progress_pct(None)
+            if on_prog:
+                on_prog(self.orchestrator.olx_scraper.get_status())
+            # Now simulate discovering a huge new slice (total_found jumps from 10 to 500)
+            self.orchestrator.olx_scraper.total_found = 500
+            self.orchestrator.olx_scraper.processed_count = 15
+            self.orchestrator.olx_scraper._update_progress_pct(None)
+            if on_prog:
+                on_prog(self.orchestrator.olx_scraper.get_status())
+            return self.orchestrator.olx_scraper.get_status()
+
+        self.orchestrator.olx_scraper.run = AsyncMock(side_effect=mock_olx_run)
+
+        def record_prog(st):
+            observed_pcts.append(st["progress_pct"])
+
+        final_st = await self.orchestrator.run(
+            sources=["olx"],
+            category="residential",
+            on_progress=record_prog,
+        )
+        self.assertEqual(final_st["progress_pct"], 100)
+        # Ensure observed percentages are monotonically non-decreasing
+        for i in range(1, len(observed_pcts)):
+            self.assertGreaterEqual(observed_pcts[i], observed_pcts[i - 1])
 
 
 if __name__ == "__main__":

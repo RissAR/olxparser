@@ -102,9 +102,9 @@ async def run_scraping_workflow(
         )
         if auto_export and orchestrator.status in ("completed", "stopped"):
             logger.info("Scraping finished (%s). Running automatic CSV exports...", orchestrator.status)
-            export_all(only_latest_date=only_latest_date, dated_archive=True)
+            export_all(only_latest_date=only_latest_date, source="olx", dated_archive=False)
             try:
-                export_unified(only_latest_date=only_latest_date, dated_archive=True)
+                export_unified(only_latest_date=only_latest_date, dated_archive=False, include_per_source=True)
             except Exception as ex_err:
                 logger.warning("Error generating unified multi-source exports: %s", ex_err)
             logger.info("Automatic CSV exports completed successfully.")
@@ -467,21 +467,45 @@ async def trigger_export(req: Optional[ExportRequest] = None):
 
     try:
         if cat == "residential":
-            info = export_residential(only_latest_date=only_latest, source=source_filter, include_source=include_source)
+            info = export_residential(
+                only_latest_date=only_latest,
+                source=source_filter or ("olx" if not include_source else None),
+                include_source=include_source,
+            )
             exported_results.append(info)
         elif cat == "commercial":
-            info = export_commercial(only_latest_date=only_latest, source=source_filter, include_source=include_source)
+            info = export_commercial(
+                only_latest_date=only_latest,
+                source=source_filter or ("olx" if not include_source else None),
+                include_source=include_source,
+            )
             exported_results.append(info)
         else:
-            res = export_all(only_latest_date=only_latest, source=source_filter, dated_archive=True)
-            for k in ("residential", "commercial", "dated_residential", "dated_commercial"):
+            res = export_all(
+                only_latest_date=only_latest,
+                source=source_filter or "olx",
+                dated_archive=False,
+            )
+            for k in ("residential", "commercial"):
                 if k in res:
                     exported_results.append(res[k])
 
             # Also generate unified multi-source CSV files if exporting all
             try:
-                res_unified = export_unified(only_latest_date=only_latest, dated_archive=True)
-                for k in ("unified_residential", "unified_commercial", "unified_master", "dated_unified_master"):
+                res_unified = export_unified(
+                    only_latest_date=only_latest,
+                    dated_archive=False,
+                    include_per_source=(source_filter is None),
+                )
+                for k in (
+                    "unified_master",
+                    "unified_residential",
+                    "unified_commercial",
+                    "rieltor_residential",
+                    "rieltor_commercial",
+                    "lun_residential",
+                    "lun_commercial",
+                ):
                     if k in res_unified:
                         exported_results.append(res_unified[k])
             except Exception as unif_err:

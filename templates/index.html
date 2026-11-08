@@ -1099,16 +1099,22 @@
           }
         }
 
-        // Progress bar calculation
-        const total = data.total_found || 0;
-        const processed = data.processed_count || 0;
+        // Monotonic Progress bar calculation
         let pct = 0;
         if (status === 'completed') {
           pct = 100;
-        } else if (total > 0) {
-          pct = Math.min(100, Math.round((processed / total) * 100));
+          window._lastProgressPct = 100;
+        } else if (typeof data.progress_pct === 'number') {
+          if (isRunning && !isRunningLocal) {
+            window._lastProgressPct = 0;
+          }
+          pct = Math.max(window._lastProgressPct || 0, Math.min(99, Math.round(data.progress_pct)));
+          window._lastProgressPct = pct;
         } else if (isRunning) {
-          pct = 15; // indicator while gathering slices
+          pct = Math.max(window._lastProgressPct || 0, 5);
+          window._lastProgressPct = pct;
+        } else {
+          window._lastProgressPct = 0;
         }
         document.getElementById('progressBar').style.width = pct + '%';
         document.getElementById('progressPct').textContent = pct + '%';
@@ -1154,6 +1160,8 @@
           const isUnifiedRes = f.filename.includes('unified_residential');
           const isUnifiedComm = f.filename.includes('unified_commercial');
           const isComm = f.filename.includes('commercial');
+          const isRieltor = f.filename.startsWith('rieltor_');
+          const isLun = f.filename.startsWith('lun_');
 
           let tplBadge = '';
           if (isMaster) {
@@ -1162,10 +1170,18 @@
             tplBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans font-medium">Житлова (Мульти)</span>';
           } else if (isUnifiedComm) {
             tplBadge = '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans font-medium">Комерційна (Мульти)</span>';
+          } else if (isRieltor && isComm) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans">Rieltor Комерційна (35 кол.)</span>';
+          } else if (isRieltor) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans">Rieltor Житлова (23 кол.)</span>';
+          } else if (isLun && isComm) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans">LUN Комерційна (35 кол.)</span>';
+          } else if (isLun) {
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans">LUN Житлова (23 кол.)</span>';
           } else if (isComm) {
-            tplBadge = '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans">Комерційна (35 кол.)</span>';
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[11px] font-sans">OLX Комерційна (35 кол.)</span>';
           } else {
-            tplBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans">Житлова (23 кол.)</span>';
+            tplBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px] font-sans">OLX Житлова (23 кол.)</span>';
           }
 
           return `

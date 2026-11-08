@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Union
 
 DEFAULT_DB_PATH = os.getenv("OLX_DB_PATH", "olx_storage.db")
 
@@ -251,7 +251,11 @@ def upsert_residential_offer(
     placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
     update_cols = [
-        f"{col} = excluded.{col}"
+        (
+            "seen_date = COALESCE(NULLIF(residential_offers.seen_date, ''), excluded.seen_date)"
+            if col == "seen_date"
+            else f"{col} = excluded.{col}"
+        )
         for col in cols
         if col not in ("url", "first_session_id")
     ]
@@ -296,7 +300,11 @@ def upsert_commercial_offer(
     placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
     update_cols = [
-        f"{col} = excluded.{col}"
+        (
+            "seen_date = COALESCE(NULLIF(commercial_offers.seen_date, ''), excluded.seen_date)"
+            if col == "seen_date"
+            else f"{col} = excluded.{col}"
+        )
         for col in cols
         if col not in ("url", "first_session_id")
     ]
@@ -350,7 +358,11 @@ def upsert_residential_offers_batch(
             placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
             update_cols = [
-                f"{col} = excluded.{col}"
+                (
+                    "seen_date = COALESCE(NULLIF(residential_offers.seen_date, ''), excluded.seen_date)"
+                    if col == "seen_date"
+                    else f"{col} = excluded.{col}"
+                )
                 for col in cols
                 if col not in ("url", "first_session_id")
             ]
@@ -402,7 +414,11 @@ def upsert_commercial_offers_batch(
             placeholders = [":" + col if col != "updated_at" else "datetime('now', 'localtime')" for col in cols]
 
             update_cols = [
-                f"{col} = excluded.{col}"
+                (
+                    "seen_date = COALESCE(NULLIF(commercial_offers.seen_date, ''), excluded.seen_date)"
+                    if col == "seen_date"
+                    else f"{col} = excluded.{col}"
+                )
                 for col in cols
                 if col not in ("url", "first_session_id")
             ]
@@ -512,13 +528,32 @@ def get_stats(db_path: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
+def get_existing_urls(category: str = "all", db_path: Optional[str] = None) -> Set[str]:
+    """Returns a set of all offer URLs already stored in the database for fast incremental deduplication."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    urls: Set[str] = set()
+    try:
+        if category in ("all", "residential"):
+            rows = conn.execute("SELECT url FROM residential_offers").fetchall()
+            urls.update(r[0] for r in rows if r[0])
+        if category in ("all", "commercial"):
+            rows = conn.execute("SELECT url FROM commercial_offers").fetchall()
+            urls.update(r[0] for r in rows if r[0])
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        conn.close()
+    return urls
+
+
 def get_all_residential_offers(
     db_path: Optional[str] = None,
     only_latest_date: bool = False,
     since_days: Optional[int] = None,
     source: Optional[str] = None,
     only_new: bool = False,
-    session_id: Optional[int] = None,
+    session_id: Optional[Union[int, List[int]]] = None,
     include_source: bool = False,
 ) -> List[Dict[str, Any]]:
     """Retrieves residential offers ordered by seen_date DESC, created_at DESC, with optional recency, source, and deduplication filtering."""
@@ -534,7 +569,15 @@ def get_all_residential_offers(
         params.append(source.strip().lower())
 
     if only_new:
-        if session_id is not None:
+        if isinstance(session_id, (list, tuple, set)):
+            valid_ids = [int(sid) for sid in session_id if sid is not None]
+            if valid_ids:
+                placeholders = ", ".join("?" for _ in valid_ids)
+                where_clauses.append(f"first_session_id IN ({placeholders})")
+                params.extend(valid_ids)
+            else:
+                where_clauses.append("first_session_id = (SELECT MAX(id) FROM scrape_sessions)")
+        elif session_id is not None:
             where_clauses.append("first_session_id = ?")
             params.append(session_id)
         else:
@@ -556,7 +599,7 @@ def get_all_commercial_offers(
     since_days: Optional[int] = None,
     source: Optional[str] = None,
     only_new: bool = False,
-    session_id: Optional[int] = None,
+    session_id: Optional[Union[int, List[int]]] = None,
     include_source: bool = False,
 ) -> List[Dict[str, Any]]:
     """Retrieves commercial offers ordered by seen_date DESC, created_at DESC, with optional recency, source, and deduplication filtering."""
@@ -572,7 +615,15 @@ def get_all_commercial_offers(
         params.append(source.strip().lower())
 
     if only_new:
-        if session_id is not None:
+        if isinstance(session_id, (list, tuple, set)):
+            valid_ids = [int(sid) for sid in session_id if sid is not None]
+            if valid_ids:
+                placeholders = ", ".join("?" for _ in valid_ids)
+                where_clauses.append(f"first_session_id IN ({placeholders})")
+                params.extend(valid_ids)
+            else:
+                where_clauses.append("first_session_id = (SELECT MAX(id) FROM scrape_sessions)")
+        elif session_id is not None:
             where_clauses.append("first_session_id = ?")
             params.append(session_id)
         else:

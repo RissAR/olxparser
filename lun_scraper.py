@@ -34,6 +34,7 @@ from curl_cffi.requests import AsyncSession
 from database import (
     DEFAULT_DB_PATH,
     create_scrape_session,
+    get_existing_urls,
     init_db,
     update_scrape_session,
     upsert_commercial_offers_batch,
@@ -354,6 +355,9 @@ class LunScraper:
         self.processed_residential: int = 0
         self.processed_commercial: int = 0
         self.errors_count: int = 0
+        self.completed_slices: int = 0
+        self.total_slices: int = 0
+        self.progress_pct: int = 0
         self.current_slice_label: str = ""
         self.error_message: Optional[str] = None
         self.started_at: Optional[str] = None
@@ -381,12 +385,22 @@ class LunScraper:
             "processed_residential": self.processed_residential,
             "processed_commercial": self.processed_commercial,
             "errors_count": self.errors_count,
+            "completed_slices": self.completed_slices,
+            "total_slices": self.total_slices,
+            "progress_pct": self.progress_pct,
             "current_slice": self.current_slice_label,
             "error_message": self.error_message,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "proxy": masked_proxy,
         }
+
+    def _update_progress_pct(self, max_offers: Optional[int], page_fraction: float = 0.0) -> None:
+        """Monotonically updates progress_pct based on slices and/or max_offers."""
+        slice_prog = ((self.completed_slices + min(0.95, max(0.0, page_fraction))) / max(1, self.total_slices)) * 96.0
+        offer_prog = ((self.processed_count / max(1, max_offers)) * 96.0) if max_offers else 0.0
+        new_pct = int(max(slice_prog, offer_prog, 1.0))
+        self.progress_pct = max(self.progress_pct, min(99, new_pct))
 
     def generate_slices(self, category: str = "all") -> List[LunSlice]:
         """Generates the list of slices based on the requested category."""
@@ -441,6 +455,12 @@ class LunScraper:
             await self.client.set_proxy(proxy.strip() if proxy.strip() else None)
 
         init_db(self.db_path)
+        known_urls = get_existing_urls(category=category, db_path=self.db_path)
+
+        slices = self.generate_slices(category)
+        if max_slices is not None:
+            slices = slices[:max_slices]
+
         self.stop_event.clear()
         self.is_running = True
         self.category = category
@@ -450,6 +470,9 @@ class LunScraper:
         self.processed_residential = 0
         self.processed_commercial = 0
         self.errors_count = 0
+        self.completed_slices = 0
+        self.total_slices = max(1, len(slices))
+        self.progress_pct = 1
         self.current_slice_label = ""
         self.error_message = None
         self.started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -471,10 +494,6 @@ class LunScraper:
         res_quota = max(1, max_offers // 2) if (category == "all" and max_offers is not None) else None
         comm_quota = (max_offers - res_quota) if (category == "all" and max_offers is not None) else None
 
-        slices = self.generate_slices(category)
-        if max_slices is not None:
-            slices = slices[:max_slices]
-
         slices_processed = 0
 
         try:
@@ -486,11 +505,14 @@ class LunScraper:
                     if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
                         break
                     if current_slice.category_type == "residential" and self.processed_residential >= res_quota:
+                        self.completed_slices += 1
                         continue
                     if current_slice.category_type == "commercial" and self.processed_commercial >= comm_quota:
+                        self.completed_slices += 1
                         continue
 
                 self.current_slice_label = current_slice.label
+                self._update_progress_pct(max_offers, page_fraction=0.0)
                 logger.info("Processing LUN Slice #%s: %s", s_idx, current_slice.label)
 
                 page = 1
@@ -534,6 +556,12 @@ class LunScraper:
                             )
                             if parsed_tuple:
                                 norm_dict, raw_dict = parsed_tuple
+                                offer_url = str(norm_dict.get("url") or "").strip()
+                                if offer_url and offer_url in known_urls:
+                                    continue
+                                if offer_url:
+                                    known_urls.add(offer_url)
+
                                 raw_json = json.dumps(raw_dict, ensure_ascii=False)
                                 batch_offers.append((norm_dict, raw_json))
                         except Exception as parse_err:
@@ -583,6 +611,8 @@ class LunScraper:
                             self.errors_count += 1
                             logger.error("Failed to upsert LUN batch into database: %s", db_err)
 
+                    self._update_progress_pct(max_offers, page_fraction=min(0.95, page * 0.05))
+
                     # Update database session
                     if self.session_id is not None:
                         try:
@@ -620,6 +650,8 @@ class LunScraper:
                     page += 1
 
                 slices_processed += 1
+                self.completed_slices += 1
+                self._update_progress_pct(max_offers, page_fraction=0.0)
                 if category == "all" and max_offers is not None:
                     if self.processed_residential >= res_quota and self.processed_commercial >= comm_quota:
                         break
@@ -630,6 +662,7 @@ class LunScraper:
                 self.status = "stopped"
             else:
                 self.status = "completed"
+                self.progress_pct = 100
 
         except Exception as fatal_ex:
             self.status = "failed"

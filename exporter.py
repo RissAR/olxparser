@@ -231,8 +231,24 @@ def list_exported_files(directories: Optional[List[Union[str, Path]]] = None) ->
                 if info:
                     files_info.append(info)
 
-    # Sort files by last modified timestamp descending
-    files_info.sort(key=lambda x: x.get("modified_at", ""), reverse=True)
+    # Sort files by logical priority first (unified master/categories, then per-source files), then modified timestamp descending
+    priority_order = {
+        "unified_kyiv_real_estate.csv": 0,
+        "unified_residential_kyiv.csv": 1,
+        "unified_commercial_kyiv.csv": 2,
+        "olx_residential_kyiv.csv": 3,
+        "olx_commercial_kyiv.csv": 4,
+        "rieltor_residential_kyiv.csv": 5,
+        "rieltor_commercial_kyiv.csv": 6,
+        "lun_residential_kyiv.csv": 7,
+        "lun_commercial_kyiv.csv": 8,
+    }
+    files_info.sort(
+        key=lambda x: (
+            priority_order.get(x.get("filename", ""), 99),
+            x.get("filename", ""),
+        )
+    )
     return files_info
 
 
@@ -242,7 +258,7 @@ def export_residential(
     only_latest_date: bool = False,
     source: Optional[str] = None,
     only_new: bool = False,
-    session_id: Optional[int] = None,
+    session_id: Optional[Union[int, List[int]]] = None,
     include_source: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -290,7 +306,7 @@ def export_commercial(
     only_latest_date: bool = False,
     source: Optional[str] = None,
     only_new: bool = False,
-    session_id: Optional[int] = None,
+    session_id: Optional[Union[int, List[int]]] = None,
     include_source: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -337,7 +353,7 @@ def export_unified_master(
     output_path: Optional[Union[str, Path]] = None,
     only_latest_date: bool = False,
     only_new: bool = False,
-    session_id: Optional[int] = None,
+    session_id: Optional[Union[int, List[int]]] = None,
 ) -> Dict[str, Any]:
     """
     Exports a single unified master file with all offers across categories and sources,
@@ -396,8 +412,9 @@ def export_unified(
     output_dir: Optional[Union[str, Path]] = None,
     only_latest_date: bool = False,
     only_new: bool = False,
-    session_id: Optional[int] = None,
+    session_id: Optional[Union[int, List[int]]] = None,
     dated_archive: bool = False,
+    include_per_source: bool = False,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Exports unified CSV files for multi-source scraping (OLX, LUN, Rieltor)
@@ -405,6 +422,7 @@ def export_unified(
     - unified_residential_kyiv.csv
     - unified_commercial_kyiv.csv
     - unified_kyiv_real_estate.csv (single master file)
+    If include_per_source is True, also exports dedicated Rieltor and LUN CSVs.
     """
     effective_dir = output_dir or os.getenv("OLX_EXPORTS_DIR")
     if effective_dir:
@@ -448,6 +466,29 @@ def export_unified(
         "unified_master": master_info,
     }
 
+    if include_per_source:
+        for src_name in ("rieltor", "lun"):
+            src_res_target = out / f"{src_name}_residential_kyiv.csv"
+            src_comm_target = out / f"{src_name}_commercial_kyiv.csv"
+            result[f"{src_name}_residential"] = export_residential(
+                db_path=db_path,
+                output_path=src_res_target,
+                only_latest_date=only_latest_date,
+                source=src_name,
+                only_new=only_new,
+                session_id=session_id,
+                include_source=False,
+            )
+            result[f"{src_name}_commercial"] = export_commercial(
+                db_path=db_path,
+                output_path=src_comm_target,
+                only_latest_date=only_latest_date,
+                source=src_name,
+                only_new=only_new,
+                session_id=session_id,
+                include_source=False,
+            )
+
     if dated_archive:
         date_stamp = datetime.now().strftime("%Y-%m-%d")
         dated_master_target = out / f"unified_kyiv_real_estate_{date_stamp}.csv"
@@ -470,7 +511,7 @@ def export_all(
     dated_archive: bool = False,
     source: Optional[str] = None,
     only_new: bool = False,
-    session_id: Optional[int] = None,
+    session_id: Optional[Union[int, List[int]]] = None,
     include_source: bool = False,
     export_unified_master_file: bool = False,
 ) -> Dict[str, Dict[str, Any]]:

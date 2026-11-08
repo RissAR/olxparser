@@ -91,6 +91,8 @@ class TestStage6EndToEnd(unittest.IsolatedAsyncioTestCase):
             "olx_storage.db", "olx_storage.db-wal", "olx_storage.db-shm",
             "kyiv_rent.db", "kyiv_rent.db-wal", "kyiv_rent.db-shm",
             "olx_residential_kyiv.csv", "olx_commercial_kyiv.csv",
+            "rieltor_residential_kyiv.csv", "rieltor_commercial_kyiv.csv",
+            "lun_residential_kyiv.csv", "lun_commercial_kyiv.csv",
             "unified_residential_kyiv.csv", "unified_commercial_kyiv.csv",
             "unified_kyiv_real_estate.csv",
         ]:
