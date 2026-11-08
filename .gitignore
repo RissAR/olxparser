@@ -37,6 +37,8 @@ exports/
 !tests/data/
 olx_residential_kyiv*.csv
 olx_commercial_kyiv*.csv
+rieltor_*.csv
+lun_*.csv
 unified_*.csv
 
 # Environments & IDEs

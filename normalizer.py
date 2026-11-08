@@ -2928,7 +2928,7 @@ class LunNormalizer:
 
         street_raw = geos.get("street") or ""
         house_raw = geos.get("house") or ""
-        district_raw = geos.get("district") or card.get("district_hint") or ""
+        district_raw = (geos.get("district") or card.get("district_hint") or "").replace("’", "'").replace("`", "'")
         jk_raw = geos.get("residential_complex") or ""
 
         # Address parsing with JK fallback
@@ -2950,7 +2950,7 @@ class LunNormalizer:
 
         # If district was empty from address parser, fallback to district_raw
         if not district and district_raw:
-            district = district_raw
+            district = district_raw.replace("’", "'").replace("`", "'")
 
         price_val = card.get("price")
         price = str(price_val) if price_val is not None else ""
@@ -3091,7 +3091,7 @@ class LunNormalizer:
 
         street_raw = geos.get("street") or ""
         house_raw = geos.get("house") or ""
-        district_raw = geos.get("district") or card.get("district_hint") or ""
+        district_raw = (geos.get("district") or card.get("district_hint") or "").replace("’", "'").replace("`", "'")
         jk_raw = geos.get("residential_complex") or ""
 
         addr_input = f"{street_raw}, {house_raw}".strip(", ") if (street_raw or house_raw) else header
@@ -3110,7 +3110,7 @@ class LunNormalizer:
                 street = jk_clean
 
         if not district and district_raw:
-            district = district_raw
+            district = district_raw.replace("’", "'").replace("`", "'")
 
         # Property type mapping
         aims = card.get("aim") or []

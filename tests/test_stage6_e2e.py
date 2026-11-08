@@ -87,26 +87,7 @@ class TestStage6EndToEnd(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for fname in [
-            "olx_storage.db", "olx_storage.db-wal", "olx_storage.db-shm",
-            "kyiv_rent.db", "kyiv_rent.db-wal", "kyiv_rent.db-shm",
-            "olx_residential_kyiv.csv", "olx_commercial_kyiv.csv",
-            "rieltor_residential_kyiv.csv", "rieltor_commercial_kyiv.csv",
-            "lun_residential_kyiv.csv", "lun_commercial_kyiv.csv",
-            "unified_residential_kyiv.csv", "unified_commercial_kyiv.csv",
-            "unified_kyiv_real_estate.csv",
-        ]:
-            p = Path(fname)
-            if p.exists():
-                try:
-                    p.unlink()
-                except OSError:
-                    pass
-        for p in Path(".").glob("*_202*-*.csv"):
-            try:
-                p.unlink()
-            except OSError:
-                pass
+        pass
 
     # -------------------------------------------------------------------------
     # 1. Multi-Source Ingestion & Persistence
